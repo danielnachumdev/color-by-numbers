@@ -8,28 +8,31 @@ Implementation guide for coding agents changing **color_by_numbers**. Product pi
 
 | Question | Answer |
 | -------- | ------ |
-| What is this? | Python toolkit: photo → **color-by-numbers** style images (Lab L quantization) |
+| What is this? | Playable **color-by-numbers game**: photo → outlined numbered regions + palette; tkinter fill-to-win UI |
 | Importable code | `color_by_numbers/` |
 | Toolchain | `pip` + [`requirements.txt`](requirements.txt) (no `pyproject.toml` / uv yet) |
-| Python | 3.11+ recommended (`tuple[...]` / modern typing in helpers) |
+| Python | 3.11+ recommended (needs `tkinter` for the game; use a CPython build that includes it) |
 | Tests | `tests/` — `unittest`; **never delete** |
-| Publish | **Not on PyPI** — clone-only; no CD wheel publish on `main` today |
+| Publish | **Not on PyPI** — clone-only; EXE packaging planned later (same `__main__` entry) |
 | Secrets | No API keys required; do not invent credential files |
 
 ```text
 .
-├── color_by_numbers/    # Importable package
-│   ├── __init__.py      # Re-exports from __main__
-│   ├── __main__.py      # transform_image* APIs
-│   └── helpers.py       # I/O, Lab/RGB, kernels, quantizers
-├── tests/               # unittest + PNG fixtures under tests/input|output
-├── main.py              # Local demos (expects ./input, writes ./output)
+├── color_by_numbers/
+│   ├── __init__.py           # GameApp, Puzzle, PuzzleGenerator, legacy transform_*
+│   ├── __main__.py           # launches GameApp
+│   ├── transforms.py         # legacy Lab / per-channel posterize helpers
+│   ├── helpers.py            # I/O, Lab/RGB, kernels, experiment quantizers
+│   ├── puzzle/               # Puzzle model + generator pipeline
+│   └── game/                 # tkinter GameApp, canvas, palette
+├── tests/
+├── main.py                   # same GUI entry as __main__
 ├── requirements.txt
-├── README.md            # Marketing / user docs
-└── .gitignore           # ignores root input/, output/, *.png, caches
+├── README.md
+└── .gitignore
 ```
 
-Shared CI/CD patterns (when wired): [`danielnachumdev/actions`](https://github.com/danielnachumdev/actions) (`@latest`). How to adopt: [`HOW-TO-USE.md`](https://github.com/danielnachumdev/actions/blob/v1/HOW-TO-USE.md). Thin `.github/` adoption may land via a separate PR — do not assume workflows exist on `main` until they do.
+Shared CI/CD patterns (when wired): [`danielnachumdev/actions`](https://github.com/danielnachumdev/actions) (`@latest`). How to adopt: [`HOW-TO-USE.md`](https://github.com/danielnachumdev/actions/blob/v1/HOW-TO-USE.md).
 
 ---
 
@@ -43,15 +46,15 @@ pip install -r requirements.txt
 
 | Task | Command |
 | ---- | ------- |
-| Import smoke | `python -c "from color_by_numbers import transform_image"` |
-| Tests | `cd tests && python -m unittest discover -v` |
-| Demo | put a photo at `./input/img1.jpg`, then `python main.py` |
+| Game | `python -m color_by_numbers` or `python main.py` |
+| Import smoke | `python -c "from color_by_numbers import GameApp, PuzzleGenerator"` |
+| Tests | `PYTHONPATH=. python -m unittest discover -s tests -v` |
 
-I/O tests use paths like `./input/black_line.png` relative to **cwd** — run unittest from `tests/` so fixtures under `tests/input/` resolve. Root `input/` / `output/` are for demos and are gitignored.
+I/O tests use paths like `./input/black_line.png` relative to **cwd** — run those from `tests/` so fixtures under `tests/input/` resolve (`cd tests && PYTHONPATH=.. python -m unittest discover -v`). Root `input/` / `output/` are for demos and are gitignored.
 
 ### Dependencies
 
-- **Runtime (`requirements.txt`):** `numpy`, `scipy`, `opencv-python`, `scikit-learn`, `danielutils`
+- **Runtime (`requirements.txt`):** `numpy`, `scipy`, `opencv-python`, `scikit-learn`, `danielutils`, `Pillow`
 - Prefer editing `requirements.txt` until/unless the repo migrates to `pyproject.toml` + uv.
 
 ---
@@ -59,9 +62,11 @@ I/O tests use paths like `./input/black_line.png` relative to **cwd** — run un
 ## Code style & domain notes
 
 - Follow the writing-python skill when adding/refactoring modules (class-first, SRP files, no stub shims).
-- Public surface today: `transform_image`, `transform_image_rgb_individual_quantization` (re-exported via `color_by_numbers/__init__.py` → `__main__.py`). Broader helpers live in `helpers.py` and are exported via `helpers.__all__`.
-- **`transform_image`:** RGB → Lab → Gaussian blur on L (`gaussian_kernel(31, 5)`) → `quantize_image1` → Lab→RGB → save. Chrominance (A/B) is kept; only L is quantized.
-- Quantizer variants (`quantize_image1` / `2` / `3`, `quantize_dumb`) are experiment helpers — keep behavior stable or update tests/docs when changing them.
+- **Product path:** `PuzzleGenerator.generate` — Lab k-means palette → connected regions per color → min-area merge → outlines → number anchors → `Puzzle`.
+- **Game:** strict fill — `Puzzle.try_fill` only accepts the region’s true palette index; completion reveals `preview`.
+- **Public surface:** `GameApp`, `Puzzle`, `PuzzleGenerator`, plus legacy `transform_image` / `transform_image_rgb_individual_quantization`.
+- Legacy **`transform_image`:** RGB → Lab → Gaussian blur on L → `quantize_image1` → Lab→RGB → save. Experiment only; not the game pipeline.
+- Quantizer variants in `helpers.py` (`quantize_image1` / `2` / `3`, `quantize_dumb`) are experiment helpers — keep behavior stable or update tests/docs when changing them.
 - Many helpers are wrapped with `@announce` (prints on call) — noisy by design for demos; do not strip casually without an intentional logging strategy.
 - `.gitignore` ignores `*.png` — do not rely on new PNGs being committed unless gitignore is updated; existing fixtures under `tests/` are already tracked.
 

@@ -30,9 +30,10 @@ class TestApplyKernelFunction(unittest.TestCase):
                                 [1, 1, 1]])
 
         result = apply_kernel(image, ones_kernel)
-        expected_result = np.array([[12, 21, 18],
-                                    [27, 45, 33],
-                                    [24, 39, 27]])
+        # convolve2d(..., mode='same', boundary='symm')
+        expected_result = np.array([[21, 27, 33],
+                                    [39, 45, 51],
+                                    [57, 63, 69]])
         np.testing.assert_array_equal(result, expected_result)
 
     def test_apply_kernel_edge_detection(self):
@@ -46,7 +47,8 @@ class TestApplyKernelFunction(unittest.TestCase):
                                           [-1, -1, -1]])
 
         result = apply_kernel(image, edge_detection_kernel)
-        expected_result = np.array([[5, 8, 3],
-                                    [-8, 0, -6],
-                                    [13, 8, 15]])
+        # convolve2d(..., mode='same', boundary='symm')
+        expected_result = np.array([[-12, -9, -6],
+                                    [-3, 0, 3],
+                                    [6, 9, 12]])
         np.testing.assert_array_equal(result, expected_result)
