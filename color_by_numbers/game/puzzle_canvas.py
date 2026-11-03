@@ -9,6 +9,7 @@ from .sheet_renderer import SheetRenderer
 
 class PuzzleCanvas(tk.Canvas):
     _ZOOM_STEP = 1.15
+    _PAN_STEP = 40
 
     def __init__(self, master, on_click) -> None:
         super().__init__(master, background='white', highlightthickness=0)
@@ -24,14 +25,37 @@ class PuzzleCanvas(tk.Canvas):
 
     def show_puzzle(self, puzzle) -> None:
         self._puzzle = puzzle
+        self._renderer.show_preview_overlay = False
         self._view.reset()
         self.redraw()
 
     def show_preview(self, puzzle) -> None:
         self._puzzle = puzzle
+        self._renderer.show_preview_overlay = True
         self._view.reset()
-        preview = self._upscale_preview(puzzle.preview)
-        self._draw_array(preview)
+        self.redraw()
+
+    def set_highlight_color(self, color_id: int | None) -> None:
+        self._renderer.highlight_color_id = color_id
+        self.redraw()
+
+    def set_hint_region(self, region_id: int | None) -> None:
+        self._renderer.hint_region_id = region_id
+        self.redraw()
+
+    def toggle_preview_overlay(self) -> None:
+        if self._puzzle is None:
+            return
+        self._renderer.show_preview_overlay = not self._renderer.show_preview_overlay
+        self.redraw()
+
+    def thicken_lines(self) -> None:
+        self._renderer.thicken()
+        self.redraw()
+
+    def thin_lines(self) -> None:
+        self._renderer.thin()
+        self.redraw()
 
     def redraw(self) -> None:
         if self._puzzle is None:
@@ -53,6 +77,23 @@ class PuzzleCanvas(tk.Canvas):
         self._view.reset()
         self._refresh_display()
 
+    def zoom_100(self) -> None:
+        self._sync_viewport_size()
+        fit = self._view.fit_scale()
+        if fit <= 0:
+            return
+        self._view.reset()
+        self._view.zoom_toward_center(1.0 / fit)
+        self._refresh_display()
+
+    def pan(self, delta_x: float, delta_y: float) -> None:
+        self._view.pan_by(delta_x, delta_y)
+        self._refresh_display()
+
+    def flash_fill(self) -> None:
+        self.configure(background='#dff7df')
+        self.after(90, lambda: self.configure(background='white'))
+
     def _bind_interactions(self) -> None:
         self.bind('<Button-1>', self._handle_click)
         self.bind('<Configure>', self._handle_configure)
@@ -65,16 +106,6 @@ class PuzzleCanvas(tk.Canvas):
         self.bind('<ButtonPress-2>', self._start_pan)
         self.bind('<B2-Motion>', self._continue_pan)
         self.bind('<ButtonRelease-2>', self._end_pan)
-
-    def _upscale_preview(self, preview: np.ndarray) -> np.ndarray:
-        height, width = preview.shape[:2]
-        scale = self._renderer.choose_scale(height, width)
-        self._renderer.content_scale = scale
-        image = Image.fromarray(preview).resize(
-            (width * scale, height * scale),
-            Image.Resampling.NEAREST,
-        )
-        return np.asarray(image)
 
     def _draw_array(self, rgb: np.ndarray) -> None:
         self._source_rgb = rgb
@@ -89,7 +120,7 @@ class PuzzleCanvas(tk.Canvas):
         displayed_width, displayed_height = self._view.displayed_size()
         image = Image.fromarray(self._source_rgb).resize(
             (displayed_width, displayed_height),
-            Image.Resampling.LANCZOS,
+            Image.Resampling.BILINEAR,
         )
         self._photo = ImageTk.PhotoImage(image)
         self.delete('all')

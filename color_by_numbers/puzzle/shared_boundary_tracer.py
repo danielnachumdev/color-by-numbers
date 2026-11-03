@@ -12,8 +12,8 @@ class SharedBoundaryTracer:
     def __init__(
         self,
         smoother: ContourSmoother | None = None,
-        simplify_epsilon: float = 0.85,
-        smooth_iterations: int = 5,
+        simplify_epsilon: float = 1.5,
+        smooth_iterations: int = 1,
     ) -> None:
         self._smoother = smoother or ContourSmoother()
         self._simplify_epsilon = simplify_epsilon
@@ -25,22 +25,20 @@ class SharedBoundaryTracer:
         return [self._finalize_path(path) for path in raw_paths if len(path) >= 2]
 
     def _build_corner_adjacency(self, label_map: np.ndarray) -> dict[tuple[int, int], set[tuple[int, int]]]:
-        height, width = label_map.shape
         adjacency: dict[tuple[int, int], set[tuple[int, int]]] = defaultdict(set)
-        for y in range(height):
-            for x in range(width - 1):
-                if label_map[y, x] == label_map[y, x + 1]:
-                    continue
-                if label_map[y, x] == 0 or label_map[y, x + 1] == 0:
-                    continue
-                self._add_segment(adjacency, (x + 1, y), (x + 1, y + 1))
-        for y in range(height - 1):
-            for x in range(width):
-                if label_map[y, x] == label_map[y + 1, x]:
-                    continue
-                if label_map[y, x] == 0 or label_map[y + 1, x] == 0:
-                    continue
-                self._add_segment(adjacency, (x, y + 1), (x + 1, y + 1))
+        left = label_map[:, :-1]
+        right = label_map[:, 1:]
+        vertical_edges = (left != right) & (left != 0) & (right != 0)
+        ys, xs = np.nonzero(vertical_edges)
+        for y, x in zip(ys.tolist(), xs.tolist(), strict=False):
+            self._add_segment(adjacency, (x + 1, y), (x + 1, y + 1))
+
+        top = label_map[:-1, :]
+        bottom = label_map[1:, :]
+        horizontal_edges = (top != bottom) & (top != 0) & (bottom != 0)
+        ys, xs = np.nonzero(horizontal_edges)
+        for y, x in zip(ys.tolist(), xs.tolist(), strict=False):
+            self._add_segment(adjacency, (x, y + 1), (x + 1, y + 1))
         return adjacency
 
     def _add_segment(

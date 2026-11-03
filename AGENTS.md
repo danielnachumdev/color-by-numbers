@@ -47,6 +47,7 @@ uv sync --group dev
 | Task | Command |
 | ---- | ------- |
 | Game | `uv run color-by-numbers` or `uv run python -m color_by_numbers` or `uv run python main.py` |
+| QoL | Undo/redo, hints, color highlight, presets, recents, DnD, save/load `.cbn.npz`, PNG/PDF export, gen progress/cancel, keyboard zoom/pan |
 | Import smoke | `uv run python -c "from color_by_numbers import PuzzleGenerator"` |
 | Tests | `uv run pytest -q` (CI default) or `cd tests && uv run python -m unittest discover -v` |
 | Add a dep | edit `pyproject.toml`, then `uv lock` && `uv sync` |

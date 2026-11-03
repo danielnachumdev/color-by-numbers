@@ -26,16 +26,16 @@ class TestPuzzleFill(unittest.TestCase):
         )
 
     def test_try_fill_accepts_matching_color(self):
-        self.assertTrue(self.puzzle.try_fill(0, 0, 0))
+        self.assertEqual(self.puzzle.try_fill(0, 0, 0), 1)
         self.assertIn(1, self.puzzle.filled_regions)
 
     def test_try_fill_rejects_wrong_color(self):
-        self.assertFalse(self.puzzle.try_fill(0, 0, 1))
+        self.assertIsNone(self.puzzle.try_fill(0, 0, 1))
         self.assertEqual(self.puzzle.filled_regions, set())
 
     def test_try_fill_rejects_repeat(self):
-        self.assertTrue(self.puzzle.try_fill(0, 0, 0))
-        self.assertFalse(self.puzzle.try_fill(1, 1, 0))
+        self.assertEqual(self.puzzle.try_fill(0, 0, 0), 1)
+        self.assertIsNone(self.puzzle.try_fill(1, 1, 0))
 
     def test_progress_and_complete(self):
         self.puzzle.try_fill(0, 0, 0)
@@ -44,6 +44,17 @@ class TestPuzzleFill(unittest.TestCase):
         self.assertFalse(self.puzzle.is_complete())
         self.puzzle.try_fill(1, 2, 0)
         self.assertTrue(self.puzzle.is_complete())
+
+    def test_undo_redo_and_color_progress(self):
+        self.assertEqual(self.puzzle.try_fill(0, 0, 0), 1)
+        self.assertEqual(self.puzzle.remaining_for_color(0), 1)
+        self.assertEqual(self.puzzle.undo(), 1)
+        self.assertEqual(self.puzzle.filled_regions, set())
+        self.assertEqual(self.puzzle.redo(), 1)
+        self.assertTrue(self.puzzle.color_is_complete(1) is False)
+        self.puzzle.try_fill(2, 0, 1)
+        self.assertTrue(self.puzzle.color_is_complete(1))
+        self.assertEqual(self.puzzle.next_incomplete_color(1), 0)
 
     def test_region_at_out_of_bounds(self):
         self.assertIsNone(self.puzzle.region_at(-1, 0))
