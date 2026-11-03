@@ -22,6 +22,7 @@ class PuzzleSession:
                 dtype=np.int32,
             ),
             filled_regions=np.array(sorted(puzzle.filled_regions), dtype=np.int32),
+            fill_history=np.array(puzzle.fill_history, dtype=np.int32),
             undo=np.array(puzzle._undo_stack, dtype=np.int32),
             redo=np.array(puzzle._redo_stack, dtype=np.int32),
             n_colors=np.array([n_colors], dtype=np.int32),
@@ -58,6 +59,7 @@ class PuzzleSession:
             preview=data['preview'],
             boundary_paths=boundary_paths,
             filled_regions=set(int(v) for v in data['filled_regions'].tolist()),
+            fill_history=[int(v) for v in data['fill_history'].tolist()] if 'fill_history' in data else [],
         )
         puzzle._undo_stack = [int(v) for v in data['undo'].tolist()]
         puzzle._redo_stack = [int(v) for v in data['redo'].tolist()]

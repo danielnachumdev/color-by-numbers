@@ -13,6 +13,7 @@ class PaletteQuantizer:
         *,
         edge_aware: bool = True,
         preserve_detail: bool = False,
+        skin_bias: bool = True,
         locked_palette: np.ndarray | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         if locked_palette is not None and len(locked_palette) > 0:
@@ -20,7 +21,13 @@ class PaletteQuantizer:
         lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2Lab)
         pixels = lab.reshape((-1, 3)).astype(np.float32)
         cluster_count = min(n_colors, len(pixels))
-        sample = self._sample_pixels(rgb, pixels, random_seed, edge_aware=edge_aware)
+        sample = self._sample_pixels(
+            rgb,
+            pixels,
+            random_seed,
+            edge_aware=edge_aware,
+            skin_bias=skin_bias,
+        )
         cv2.setRNGSeed(random_seed)
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 15, 1.0)
         _compactness, _sample_labels, centers = cv2.kmeans(
@@ -59,19 +66,29 @@ class PaletteQuantizer:
         random_seed: int,
         *,
         edge_aware: bool,
+        skin_bias: bool,
     ) -> np.ndarray:
         if len(pixels) <= self._SAMPLE_CAP:
             return pixels
         rng = np.random.default_rng(random_seed)
-        if not edge_aware:
-            choice = rng.choice(len(pixels), size=self._SAMPLE_CAP, replace=False)
-            return pixels[choice]
-        gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        edges = cv2.Canny(gray, 80, 160).reshape(-1).astype(np.float64)
-        weights = edges + 1.0
+        weights = np.ones(len(pixels), dtype=np.float64)
+        if edge_aware:
+            gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+            weights += cv2.Canny(gray, 80, 160).reshape(-1).astype(np.float64)
+        if skin_bias:
+            weights += self._skin_weights(rgb) * 8.0
+        weights = np.maximum(weights, 1e-6)
         weights /= weights.sum()
         choice = rng.choice(len(pixels), size=self._SAMPLE_CAP, replace=False, p=weights)
         return pixels[choice]
+
+    def _skin_weights(self, rgb: np.ndarray) -> np.ndarray:
+        # Rough YCrCb skin locus — boosts face/skin sampling without a detector.
+        ycrcb = cv2.cvtColor(rgb, cv2.COLOR_RGB2YCrCb)
+        cr = ycrcb[:, :, 1]
+        cb = ycrcb[:, :, 2]
+        mask = (cr >= 133) & (cr <= 173) & (cb >= 77) & (cb <= 127)
+        return mask.reshape(-1).astype(np.float64)
 
     def _despeckle(self, index_map: np.ndarray, *, preserve_detail: bool) -> np.ndarray:
         if preserve_detail:

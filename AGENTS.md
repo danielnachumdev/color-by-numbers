@@ -50,7 +50,7 @@ uv sync --group dev
 | Task | Command |
 | ---- | ------- |
 | Game | `uv run color-by-numbers` or `uv run python -m color_by_numbers` or `uv run python main.py` |
-| QoL | Undo/redo, hints, paint mode, vision modes, timer/score, Kids preset, clipboard/webcam/gallery, autosave/resume, print-ready export, edge-aware/locked palette, gen progress/cancel |
+| QoL | Undo/redo/replay, hints, paint mode, vision modes, timer/score, Kids preset + region caps, clipboard/live webcam/gallery, autosave/resume/settings, multi-page print, i18n EN/HE, edge-aware/skin-bias/locked palette |
 | Import smoke | `uv run python -c "from color_by_numbers import PuzzleGenerator"` |
 | Tests | `uv run pytest -q` (CI default) or `cd tests && uv run python -m unittest discover -v` |
 | Add a dep | edit `pyproject.toml`, then `uv lock` && `uv sync` |
