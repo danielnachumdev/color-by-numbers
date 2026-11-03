@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.ndimage import distance_transform_edt
 
 
 class RegionCleaner:
@@ -8,50 +9,45 @@ class RegionCleaner:
         region_color_id: dict[int, int],
         min_area: int,
     ) -> tuple[np.ndarray, dict[int, int]]:
-        cleaned = label_map.copy()
-        colors = dict(region_color_id)
-        while True:
-            small_id = self._smallest_below_min(cleaned, colors, min_area)
-            if small_id is None:
-                break
-            neighbor_id = self._dominant_neighbor(cleaned, small_id)
-            if neighbor_id is None:
-                break
-            cleaned[cleaned == small_id] = neighbor_id
-            del colors[small_id]
-        return self._reindex(cleaned, colors)
+        labels = label_map.copy()
+        areas = np.bincount(labels.ravel())
+        keep_ids = self._large_region_ids(region_color_id, areas, min_area)
+        if not keep_ids:
+            return self._reindex(labels, region_color_id)
 
-    def _smallest_below_min(
+        known = np.isin(labels, keep_ids)
+        if not known.any():
+            return self._reindex(labels, region_color_id)
+        if known.all():
+            kept_colors = {region_id: region_color_id[region_id] for region_id in keep_ids}
+            return self._reindex(labels, kept_colors)
+
+        _distances, indices = distance_transform_edt(~known, return_distances=True, return_indices=True)
+        filled = labels.copy()
+        unknown = ~known
+        filled[unknown] = labels[indices[0][unknown], indices[1][unknown]]
+        kept_colors = {region_id: region_color_id[region_id] for region_id in keep_ids}
+        return self._reindex(filled, kept_colors)
+
+    def _large_region_ids(
         self,
-        label_map: np.ndarray,
         region_color_id: dict[int, int],
+        areas: np.ndarray,
         min_area: int,
-    ) -> int | None:
-        areas = {
-            region_id: int(np.count_nonzero(label_map == region_id))
+    ) -> list[int]:
+        keep = [
+            region_id
             for region_id in region_color_id
-        }
-        candidates = [region_id for region_id, area in areas.items() if area < min_area]
-        if not candidates:
-            return None
-        return min(candidates, key=lambda region_id: areas[region_id])
-
-    def _dominant_neighbor(self, label_map: np.ndarray, region_id: int) -> int | None:
-        height, width = label_map.shape
-        ys, xs = np.where(label_map == region_id)
-        neighbor_counts: dict[int, int] = {}
-        for y, x in zip(ys, xs):
-            for dy, dx in ((0, 1), (1, 0), (0, -1), (-1, 0)):
-                ny, nx = y + dy, x + dx
-                if ny < 0 or nx < 0 or ny >= height or nx >= width:
-                    continue
-                neighbor_id = int(label_map[ny, nx])
-                if neighbor_id == 0 or neighbor_id == region_id:
-                    continue
-                neighbor_counts[neighbor_id] = neighbor_counts.get(neighbor_id, 0) + 1
-        if not neighbor_counts:
-            return None
-        return max(neighbor_counts, key=neighbor_counts.get)
+            if region_id < len(areas) and int(areas[region_id]) >= min_area
+        ]
+        if keep:
+            return keep
+        # Nothing met the cutoff — keep the single largest region as a seed.
+        best = max(
+            region_color_id,
+            key=lambda region_id: int(areas[region_id]) if region_id < len(areas) else 0,
+        )
+        return [best]
 
     def _reindex(
         self,

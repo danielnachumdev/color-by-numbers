@@ -32,12 +32,16 @@ uv run python -m color_by_numbers
 uv run python main.py
 ```
 
-1. Click **Open image…** (local file) or **Open URL…** (http/https image link)  
-2. Adjust **Colors** (default 8) and click **New puzzle** if you change it  
-3. Select a numbered swatch, then click regions that should use that color  
+1. Open a local image, URL, or **File → Recent…** (drag-and-drop if your Tk build supports it)  
+2. Choose a difficulty **Preset** (Easy / Normal / Hard) or set **Colors**, then **New puzzle** (Cancel stops generation)  
+3. Select a numbered swatch (remaining counts shown), then click matching regions  
 4. Correct fills stick; wrong color is ignored. Finish all regions to win  
 
-The window opens at ~90% of the screen; resize freely — the puzzle fills the canvas. Zoom with the mouse wheel (or **Zoom + / Zoom −**), **Fit** to reset, and middle-drag to pan when zoomed in.  
+**Play QoL:** Undo/Redo (`Ctrl+Z` / `Ctrl+Y`), Hint (`H`), highlight current color, auto-advance when a color is done, clearer progress (`Color N: X left — filled/total (%)`), line thickness controls, toggle preview (`P`).
+
+**View:** window ~90% of screen; wheel / `+` `-` zoom; `0` Fit; `1` 100%; arrows pan; middle-drag pan.
+
+**File:** save/load progress (`.cbn.npz`), export sheet+palette as PNG/PDF.
 
 Future standalone EXE will use the same entrypoint (`color_by_numbers.__main__:main`).
 

@@ -1,9 +1,12 @@
+from collections.abc import Callable
 from urllib.parse import urlparse
 
 import cv2
 import numpy as np
 
 from .http_gateway import HttpGateway
+
+DownloadProgress = Callable[[int, int | None], None]
 
 
 class RgbImageLoader:
@@ -14,9 +17,9 @@ class RgbImageLoader:
         image = cv2.imread(path)
         return self._bgr_to_rgb(image, f'Could not read image: {path}')
 
-    def load_from_url(self, url: str) -> np.ndarray:
+    def load_from_url(self, url: str, progress: DownloadProgress | None = None) -> np.ndarray:
         self._require_http_url(url)
-        return self.load_from_bytes(self._http.get(url.strip()))
+        return self.load_from_bytes(self._http.get(url.strip(), progress=progress))
 
     def load_from_bytes(self, data: bytes) -> np.ndarray:
         if not data:

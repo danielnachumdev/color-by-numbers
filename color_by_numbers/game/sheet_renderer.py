@@ -11,42 +11,90 @@ from .sheet_font import SheetFont
 class SheetRenderer:
     def __init__(
         self,
-        base_scale: int = 3,
-        min_side: int = 1000,
+        base_scale: int = 2,
+        min_side: int = 720,
         line_width: int = 1,
         font_loader: SheetFont | None = None,
     ) -> None:
         self._base_scale = base_scale
         self._min_side = min_side
-        self._line_width = line_width
+        self.line_width = line_width
         self._font_loader = font_loader or SheetFont()
         self.content_scale = 1
+        self.highlight_color_id: int | None = None
+        self.hint_region_id: int | None = None
+        self.show_preview_overlay = False
 
     def render(self, puzzle: Puzzle) -> np.ndarray:
         height, width = puzzle.label_map.shape
         scale = self.choose_scale(height, width)
         self.content_scale = scale
-        sheet = self._paint_fills(puzzle, scale)
+        if self.show_preview_overlay:
+            sheet = self._paint_preview(puzzle, scale)
+        else:
+            sheet = self._paint_fills(puzzle, scale)
+            self._paint_highlight(sheet, puzzle, scale)
+            self._paint_hint(sheet, puzzle, scale)
         self._paint_smooth_outlines(sheet, puzzle, scale)
-        return self._paint_numbers(sheet, puzzle, scale)
+        if not self.show_preview_overlay:
+            sheet = self._paint_numbers(sheet, puzzle, scale)
+        return sheet
 
     def choose_scale(self, height: int, width: int) -> int:
         longest = max(height, width)
         fitted = int(math.ceil(self._min_side / float(longest)))
         return max(self._base_scale, fitted)
 
+    def thicken(self) -> None:
+        self.line_width = min(6, self.line_width + 1)
+
+    def thin(self) -> None:
+        self.line_width = max(1, self.line_width - 1)
+
+    def _paint_preview(self, puzzle: Puzzle, scale: int) -> np.ndarray:
+        height, width = puzzle.preview.shape[:2]
+        return cv2.resize(
+            puzzle.preview,
+            (width * scale, height * scale),
+            interpolation=cv2.INTER_NEAREST,
+        )
+
     def _paint_fills(self, puzzle: Puzzle, scale: int) -> np.ndarray:
         height, width = puzzle.label_map.shape
         sheet = np.full((height * scale, width * scale, 3), 255, dtype=np.uint8)
-        upscaled = cv2.resize(
-            puzzle.label_map.astype(np.float32),
-            (width * scale, height * scale),
-            interpolation=cv2.INTER_NEAREST,
-        ).astype(np.int32)
+        upscaled = self._upscaled_labels(puzzle, scale)
         for region_id in puzzle.filled_regions:
             color_id = puzzle.region_color_id[region_id]
             sheet[upscaled == region_id] = puzzle.palette[color_id]
         return sheet
+
+    def _paint_highlight(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
+        if self.highlight_color_id is None:
+            return
+        upscaled = self._upscaled_labels(puzzle, scale)
+        dim = (sheet.astype(np.float32) * 0.72 + 255 * 0.28).astype(np.uint8)
+        keep = np.zeros(upscaled.shape, dtype=bool)
+        for region_id, color_id in puzzle.region_color_id.items():
+            if color_id == self.highlight_color_id and region_id not in puzzle.filled_regions:
+                keep |= upscaled == region_id
+        sheet[:] = np.where(keep[..., None], sheet, dim)
+
+    def _paint_hint(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
+        if self.hint_region_id is None:
+            return
+        upscaled = self._upscaled_labels(puzzle, scale)
+        color = puzzle.palette[puzzle.region_color_id[self.hint_region_id]]
+        tint = (color.astype(np.float32) * 0.45 + np.array([255, 255, 180]) * 0.55)
+        mask = upscaled == self.hint_region_id
+        sheet[mask] = tint.astype(np.uint8)
+
+    def _upscaled_labels(self, puzzle: Puzzle, scale: int) -> np.ndarray:
+        height, width = puzzle.label_map.shape
+        return cv2.resize(
+            puzzle.label_map.astype(np.float32),
+            (width * scale, height * scale),
+            interpolation=cv2.INTER_NEAREST,
+        ).astype(np.int32)
 
     def _paint_smooth_outlines(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
         if puzzle.boundary_paths:
@@ -56,7 +104,7 @@ class SheetRenderer:
         self._draw_image_rectangle(sheet, puzzle, scale)
 
     def _draw_boundary_paths(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
-        thickness = max(self._line_width, int(round(scale * 0.35)))
+        thickness = max(self.line_width, int(round(scale * 0.28)) + (self.line_width - 1))
         for points in puzzle.boundary_paths:
             if len(points) < 2:
                 continue
@@ -73,13 +121,11 @@ class SheetRenderer:
 
     def _draw_image_rectangle(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
         height, width = puzzle.label_map.shape
-        thickness = max(self._line_width, int(round(scale * 0.35)))
-        top_left = (0, 0)
-        bottom_right = (width * scale - 1, height * scale - 1)
+        thickness = max(self.line_width, int(round(scale * 0.28)) + (self.line_width - 1))
         cv2.rectangle(
             sheet,
-            top_left,
-            bottom_right,
+            (0, 0),
+            (width * scale - 1, height * scale - 1),
             color=(0, 0, 0),
             thickness=thickness,
             lineType=cv2.LINE_AA,

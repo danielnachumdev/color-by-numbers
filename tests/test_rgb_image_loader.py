@@ -27,7 +27,7 @@ class TestRgbImageLoader(unittest.TestCase):
         http.get.return_value = self.fixture.read_bytes()
         loader = RgbImageLoader(http=http)
         rgb = loader.load_from_url('https://example.com/photo.png')
-        http.get.assert_called_once_with('https://example.com/photo.png')
+        http.get.assert_called_once_with('https://example.com/photo.png', progress=None)
         self.assertEqual(rgb.shape[2], 3)
 
     def test_rejects_non_http_url(self):
