@@ -32,37 +32,31 @@ uv run python -m color_by_numbers
 uv run python main.py
 ```
 
-1. Open a local image, URL, or **File → Recent…** (drag-and-drop if your Tk build supports it)  
-2. Choose a difficulty **Preset** (Easy / Normal / Hard) or set **Colors**, then **New puzzle** (Cancel stops generation)  
-3. Select a numbered swatch (remaining counts shown), then click matching regions  
-4. Correct fills stick; wrong color is ignored. Finish all regions to win  
+1. Open a local image, URL, **Paste** (`Ctrl+V`), **Webcam**, gallery folder, or **File → Recent…**  
+2. Choose a difficulty **Preset** (Easy / Normal / Hard / Kids) or set **Colors**, then **New puzzle** (Cancel stops generation)  
+3. Select a numbered swatch (remaining counts shown), then click matching regions (enable **Paint mode** to drag-fill)  
+4. Correct fills stick; wrong color is ignored. Finish all regions to win — timer/score shown in the status bar  
 
-**Play QoL:** Undo/Redo (`Ctrl+Z` / `Ctrl+Y`), Hint (`H`), highlight current color, auto-advance when a color is done, clearer progress (`Color N: X left — filled/total (%)`), line thickness controls, toggle preview (`P`).
+**Play QoL:** Undo/Redo (`Ctrl+Z` / `Ctrl+Y`), Hint (`H`), highlight current color, paint mode, edge-aware colors, lock palette, Vision modes (color-blind / high contrast), auto-advance, line thickness, preview (`P`).
 
 **View:** window ~90% of screen; wheel / `+` `-` zoom; `0` Fit; `1` 100%; arrows pan; middle-drag pan.
 
-**File:** save/load progress (`.cbn.npz`), export sheet+palette as PNG/PDF.
+**File:** save/load progress (`.cbn.npz`), autosave slots + resume on launch, print-ready PNG/PDF export (margins, cut marks, palette legend).
 
 Future standalone EXE will use the same entrypoint (`color_by_numbers.__main__:main`).
 
 ## Library usage
+
+See [`docs/LIBRARY.md`](docs/LIBRARY.md) for the full API. Short version:
 
 ```python
 from color_by_numbers import PuzzleGenerator
 from color_by_numbers.helpers import read_rgb
 
 rgb = read_rgb("input/photo.jpg")
-puzzle = PuzzleGenerator().generate(rgb, n_colors=8)
+puzzle = PuzzleGenerator().generate(rgb, n_colors=8, edge_aware=True)
 print(puzzle.progress())  # (0, region_count)
 puzzle.try_fill(x=10, y=12, palette_index=0)
-```
-
-Legacy posterize (experiment):
-
-```python
-from color_by_numbers import transform_image
-
-transform_image("input/photo.jpg", "output/photo_cbn.jpg", n_colors=5)
 ```
 
 ## What you get

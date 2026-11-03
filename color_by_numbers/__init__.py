@@ -5,6 +5,7 @@ from .transforms import transform_image, transform_image_rgb_individual_quantiza
 __all__ = [
     'Puzzle',
     'PuzzleGenerator',
+    # Legacy experiment helpers (not used by the game pipeline):
     'transform_image',
     'transform_image_rgb_individual_quantization',
 ]

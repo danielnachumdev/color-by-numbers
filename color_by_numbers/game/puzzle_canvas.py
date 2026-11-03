@@ -21,32 +21,51 @@ class PuzzleCanvas(tk.Canvas):
         self._puzzle = None
         self._last_size = (0, 0)
         self._pan_last: tuple[int, int] | None = None
+        self._paint_mode = False
         self._bind_interactions()
 
     def show_puzzle(self, puzzle) -> None:
         self._puzzle = puzzle
         self._renderer.show_preview_overlay = False
+        self._renderer.invalidate_cache()
         self._view.reset()
         self.redraw()
 
     def show_preview(self, puzzle) -> None:
         self._puzzle = puzzle
         self._renderer.show_preview_overlay = True
+        self._renderer.invalidate_cache()
         self._view.reset()
+        self.redraw()
+
+    def set_paint_mode(self, enabled: bool) -> None:
+        self._paint_mode = enabled
+
+    def set_display_palette(self, palette: np.ndarray | None) -> None:
+        self._renderer.display_palette = palette
+        self._renderer.invalidate_cache()
+        self.redraw()
+
+    def set_number_scale(self, scale: float) -> None:
+        self._renderer.number_scale = scale
+        self._renderer.invalidate_cache()
         self.redraw()
 
     def set_highlight_color(self, color_id: int | None) -> None:
         self._renderer.highlight_color_id = color_id
+        self._renderer.invalidate_cache()
         self.redraw()
 
     def set_hint_region(self, region_id: int | None) -> None:
         self._renderer.hint_region_id = region_id
+        self._renderer.invalidate_cache()
         self.redraw()
 
     def toggle_preview_overlay(self) -> None:
         if self._puzzle is None:
             return
         self._renderer.show_preview_overlay = not self._renderer.show_preview_overlay
+        self._renderer.invalidate_cache()
         self.redraw()
 
     def thicken_lines(self) -> None:
@@ -96,6 +115,7 @@ class PuzzleCanvas(tk.Canvas):
 
     def _bind_interactions(self) -> None:
         self.bind('<Button-1>', self._handle_click)
+        self.bind('<B1-Motion>', self._handle_drag)
         self.bind('<Configure>', self._handle_configure)
         self.bind('<MouseWheel>', self._handle_mousewheel)
         self.bind('<Control-MouseWheel>', self._handle_mousewheel)
@@ -141,16 +161,28 @@ class PuzzleCanvas(tk.Canvas):
         self._last_size = size
         self._refresh_display()
 
-    def _handle_click(self, event) -> None:
+    def _label_coords(self, event) -> tuple[int, int] | None:
         if self._puzzle is None:
-            return
+            return None
         mapped = self._view.canvas_to_content(event.x, event.y)
         if mapped is None:
-            return
+            return None
         scale = max(1, self._renderer.content_scale)
-        label_x = int(mapped[0] / scale)
-        label_y = int(mapped[1] / scale)
-        self._on_click(label_x, label_y)
+        return int(mapped[0] / scale), int(mapped[1] / scale)
+
+    def _handle_click(self, event) -> None:
+        coords = self._label_coords(event)
+        if coords is None:
+            return
+        self._on_click(coords[0], coords[1])
+
+    def _handle_drag(self, event) -> None:
+        if not self._paint_mode:
+            return
+        coords = self._label_coords(event)
+        if coords is None:
+            return
+        self._on_click(coords[0], coords[1])
 
     def _handle_mousewheel(self, event) -> None:
         if event.delta == 0:

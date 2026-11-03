@@ -24,8 +24,23 @@ class SheetRenderer:
         self.highlight_color_id: int | None = None
         self.hint_region_id: int | None = None
         self.show_preview_overlay = False
+        self.display_palette: np.ndarray | None = None
+        self.number_scale = 1.0
+        self._cache_key: tuple | None = None
+        self._cache_sheet: np.ndarray | None = None
+        self._label_cache_key: tuple | None = None
+        self._label_cache: np.ndarray | None = None
+
+    def invalidate_cache(self) -> None:
+        self._cache_key = None
+        self._cache_sheet = None
+        self._label_cache_key = None
+        self._label_cache = None
 
     def render(self, puzzle: Puzzle) -> np.ndarray:
+        key = self._make_cache_key(puzzle)
+        if key == self._cache_key and self._cache_sheet is not None:
+            return self._cache_sheet.copy()
         height, width = puzzle.label_map.shape
         scale = self.choose_scale(height, width)
         self.content_scale = scale
@@ -38,7 +53,9 @@ class SheetRenderer:
         self._paint_smooth_outlines(sheet, puzzle, scale)
         if not self.show_preview_overlay:
             sheet = self._paint_numbers(sheet, puzzle, scale)
-        return sheet
+        self._cache_key = key
+        self._cache_sheet = sheet
+        return sheet.copy()
 
     def choose_scale(self, height: int, width: int) -> int:
         longest = max(height, width)
@@ -47,9 +64,30 @@ class SheetRenderer:
 
     def thicken(self) -> None:
         self.line_width = min(6, self.line_width + 1)
+        self.invalidate_cache()
 
     def thin(self) -> None:
         self.line_width = max(1, self.line_width - 1)
+        self.invalidate_cache()
+
+    def _make_cache_key(self, puzzle: Puzzle) -> tuple:
+        filled = tuple(sorted(puzzle.filled_regions))
+        palette = self.display_palette if self.display_palette is not None else puzzle.palette
+        return (
+            id(puzzle.label_map),
+            filled,
+            self.highlight_color_id,
+            self.hint_region_id,
+            self.show_preview_overlay,
+            self.line_width,
+            round(self.number_scale, 2),
+            tuple(palette.reshape(-1).tolist()),
+        )
+
+    def _palette(self, puzzle: Puzzle) -> np.ndarray:
+        if self.display_palette is not None and len(self.display_palette) == len(puzzle.palette):
+            return self.display_palette
+        return puzzle.palette
 
     def _paint_preview(self, puzzle: Puzzle, scale: int) -> np.ndarray:
         height, width = puzzle.preview.shape[:2]
@@ -62,39 +100,52 @@ class SheetRenderer:
     def _paint_fills(self, puzzle: Puzzle, scale: int) -> np.ndarray:
         height, width = puzzle.label_map.shape
         sheet = np.full((height * scale, width * scale, 3), 255, dtype=np.uint8)
+        if not puzzle.filled_regions:
+            return sheet
         upscaled = self._upscaled_labels(puzzle, scale)
+        palette = self._palette(puzzle)
         for region_id in puzzle.filled_regions:
             color_id = puzzle.region_color_id[region_id]
-            sheet[upscaled == region_id] = puzzle.palette[color_id]
+            sheet[upscaled == region_id] = palette[color_id]
         return sheet
 
     def _paint_highlight(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
         if self.highlight_color_id is None:
             return
         upscaled = self._upscaled_labels(puzzle, scale)
-        dim = (sheet.astype(np.float32) * 0.72 + 255 * 0.28).astype(np.uint8)
-        keep = np.zeros(upscaled.shape, dtype=bool)
+        color_lookup = np.full(int(upscaled.max()) + 1, -1, dtype=np.int32)
         for region_id, color_id in puzzle.region_color_id.items():
-            if color_id == self.highlight_color_id and region_id not in puzzle.filled_regions:
-                keep |= upscaled == region_id
+            color_lookup[region_id] = color_id
+        keep = color_lookup[upscaled] == self.highlight_color_id
+        for region_id in puzzle.filled_regions:
+            keep[upscaled == region_id] = False
+        if not keep.any():
+            return
+        dim = (sheet.astype(np.float32) * 0.72 + 255 * 0.28).astype(np.uint8)
         sheet[:] = np.where(keep[..., None], sheet, dim)
 
     def _paint_hint(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
         if self.hint_region_id is None:
             return
         upscaled = self._upscaled_labels(puzzle, scale)
-        color = puzzle.palette[puzzle.region_color_id[self.hint_region_id]]
+        color = self._palette(puzzle)[puzzle.region_color_id[self.hint_region_id]]
         tint = (color.astype(np.float32) * 0.45 + np.array([255, 255, 180]) * 0.55)
         mask = upscaled == self.hint_region_id
         sheet[mask] = tint.astype(np.uint8)
 
     def _upscaled_labels(self, puzzle: Puzzle, scale: int) -> np.ndarray:
+        key = (id(puzzle.label_map), scale)
+        if key == self._label_cache_key and self._label_cache is not None:
+            return self._label_cache
         height, width = puzzle.label_map.shape
-        return cv2.resize(
+        upscaled = cv2.resize(
             puzzle.label_map.astype(np.float32),
             (width * scale, height * scale),
             interpolation=cv2.INTER_NEAREST,
         ).astype(np.int32)
+        self._label_cache_key = key
+        self._label_cache = upscaled
+        return upscaled
 
     def _paint_smooth_outlines(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
         if puzzle.boundary_paths:
@@ -142,7 +193,8 @@ class SheetRenderer:
     def _paint_numbers(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> np.ndarray:
         image = Image.fromarray(sheet)
         draw = ImageDraw.Draw(image)
-        font = self._font_loader.load(max(12, 7 * scale))
+        size = max(12, int(round(7 * scale * self.number_scale)))
+        font = self._font_loader.load(size)
         for region_id, (x, y) in puzzle.number_anchors.items():
             if region_id in puzzle.filled_regions:
                 continue
