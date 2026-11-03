@@ -10,8 +10,9 @@ DownloadProgress = Callable[[int, int | None], None]
 
 
 class RgbImageLoader:
-    def __init__(self, http: HttpGateway | None = None) -> None:
+    def __init__(self, http: HttpGateway | None = None, max_decode_side: int = 1600) -> None:
         self._http = http or HttpGateway()
+        self._max_decode_side = max_decode_side
 
     def load_from_path(self, path: str) -> np.ndarray:
         image = cv2.imread(path)
@@ -36,4 +37,14 @@ class RgbImageLoader:
     def _bgr_to_rgb(self, image: np.ndarray | None, error_message: str) -> np.ndarray:
         if image is None or image.size == 0:
             raise ValueError(error_message)
-        return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        return self._downscale(rgb)
+
+    def _downscale(self, rgb: np.ndarray) -> np.ndarray:
+        height, width = rgb.shape[:2]
+        longest = max(height, width)
+        if longest <= self._max_decode_side:
+            return rgb
+        scale = self._max_decode_side / float(longest)
+        size = (int(round(width * scale)), int(round(height * scale)))
+        return cv2.resize(rgb, size, interpolation=cv2.INTER_AREA)

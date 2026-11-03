@@ -24,8 +24,10 @@ Implementation guide for coding agents changing **color_by_numbers**. Product pi
 │   ├── transforms.py         # legacy Lab / per-channel posterize helpers
 │   ├── helpers.py            # I/O, Lab/RGB, kernels, experiment quantizers
 │   ├── puzzle/               # Puzzle model + generator pipeline
-│   ├── loading/              # local path + URL → RGB (HttpGateway + RgbImageLoader)
-│   └── game/                 # tkinter GameApp, canvas, zoom/view transform, palette
+│   ├── loading/              # path/URL/clipboard/webcam → RGB
+│   ├── persistence/          # session save/load + autosave slots
+│   └── game/                 # tkinter GameApp, canvas, print export, play UX
+├── docs/LIBRARY.md           # library API (legacy helpers documented there)
 ├── tests/
 ├── main.py                   # same GUI entry as __main__
 ├── pyproject.toml
@@ -33,6 +35,7 @@ Implementation guide for coding agents changing **color_by_numbers**. Product pi
 ├── README.md
 └── .gitignore
 ```
+
 
 Shared CI/CD patterns (when wired): [`danielnachumdev/actions`](https://github.com/danielnachumdev/actions) (`@latest`). How to adopt: [`HOW-TO-USE.md`](https://github.com/danielnachumdev/actions/blob/v1/HOW-TO-USE.md).
 
@@ -47,7 +50,7 @@ uv sync --group dev
 | Task | Command |
 | ---- | ------- |
 | Game | `uv run color-by-numbers` or `uv run python -m color_by_numbers` or `uv run python main.py` |
-| QoL | Undo/redo, hints, color highlight, presets, recents, DnD, save/load `.cbn.npz`, PNG/PDF export, gen progress/cancel, keyboard zoom/pan |
+| QoL | Undo/redo, hints, paint mode, vision modes, timer/score, Kids preset, clipboard/webcam/gallery, autosave/resume, print-ready export, edge-aware/locked palette, gen progress/cancel |
 | Import smoke | `uv run python -c "from color_by_numbers import PuzzleGenerator"` |
 | Tests | `uv run pytest -q` (CI default) or `cd tests && uv run python -m unittest discover -v` |
 | Add a dep | edit `pyproject.toml`, then `uv lock` && `uv sync` |

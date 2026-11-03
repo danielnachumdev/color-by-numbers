@@ -45,6 +45,10 @@ class PuzzleGenerator:
         progress: ProgressCallback | None = None,
         cancel_event: Event | None = None,
         tracker: GenerationProgress | None = None,
+        *,
+        edge_aware: bool = True,
+        preserve_detail: bool = False,
+        locked_palette: np.ndarray | None = None,
     ) -> Puzzle:
         progress_tracker = tracker or GenerationProgress(include_download=False)
         report = progress or (lambda _f, _m, _e, _elapsed: None)
@@ -64,7 +68,13 @@ class PuzzleGenerator:
             stage('Resizing…')
             rgb = self._resize_to_max_side(rgb, max_side)
             stage('Quantizing colors…')
-            index_map, palette = self._quantizer.quantize(rgb, n_colors)
+            index_map, palette = self._quantizer.quantize(
+                rgb,
+                n_colors,
+                edge_aware=edge_aware,
+                preserve_detail=preserve_detail,
+                locked_palette=locked_palette,
+            )
             stage('Finding regions…')
             label_map, region_color_id = self._labeler.label(index_map, n_colors)
             stage('Merging tiny regions…')

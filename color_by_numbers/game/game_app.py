@@ -5,15 +5,22 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog
 from tkinter import ttk
 
+import numpy as np
+
+from ..loading.clipboard_image import ClipboardImage
 from ..loading.rgb_image_loader import RgbImageLoader
+from ..loading.webcam_capture import WebcamCapture
+from ..persistence.autosave_store import AutosaveStore
 from ..persistence.puzzle_session import PuzzleSession
 from ..persistence.recent_sources import RecentSources
 from ..puzzle.generation_progress import GenerationProgress
 from ..puzzle.puzzle_generator import PuzzleGenerator
+from .color_blind_palette import ColorBlindPalette
 from .difficulty_preset import DifficultyPreset, DifficultyPresets
 from .feedback_sound import FeedbackSound
 from .loading_overlay import LoadingOverlay
 from .palette_panel import PalettePanel
+from .play_timer import PlayTimer
 from .puzzle_canvas import PuzzleCanvas
 from .screen_window_geometry import ScreenWindowGeometry
 from .sheet_exporter import SheetExporter
@@ -28,6 +35,9 @@ class GameApp:
         recent_sources: RecentSources | None = None,
         session_store: PuzzleSession | None = None,
         exporter: SheetExporter | None = None,
+        autosave: AutosaveStore | None = None,
+        clipboard: ClipboardImage | None = None,
+        webcam: WebcamCapture | None = None,
     ) -> None:
         self._generator = generator or PuzzleGenerator()
         self._image_loader = image_loader or RgbImageLoader()
@@ -35,11 +45,19 @@ class GameApp:
         self._recents = recent_sources or RecentSources()
         self._sessions = session_store or PuzzleSession()
         self._exporter = exporter or SheetExporter()
+        self._autosave = autosave or AutosaveStore(sessions=self._sessions)
+        self._clipboard = clipboard or ClipboardImage()
+        self._webcam = webcam or WebcamCapture()
+        self._color_blind = ColorBlindPalette()
+        self._timer = PlayTimer()
         self._puzzle = None
         self._rgb = None
         self._source_kind = None
         self._source_value = None
         self._min_region_area: int | None = None
+        self._preserve_detail = False
+        self._kids_mode = False
+        self._locked_palette: np.ndarray | None = None
         self._cancel_event: threading.Event | None = None
         self._generate_thread: threading.Thread | None = None
         self._progress_lock = threading.Lock()
@@ -51,16 +69,22 @@ class GameApp:
         }
         self._job_result: dict | None = None
         self._loading_tick_scheduled = False
+        self._autosave_after: str | None = None
         self._root = tk.Tk()
         self._root.title('Color by Numbers')
         self._n_colors = tk.IntVar(value=8)
         self._status = tk.StringVar(value='Open an image or URL to start')
         self._highlight_current = tk.BooleanVar(value=True)
+        self._paint_mode = tk.BooleanVar(value=False)
+        self._edge_aware = tk.BooleanVar(value=True)
+        self._lock_palette = tk.BooleanVar(value=False)
+        self._color_mode = tk.StringVar(value='Normal')
         self._sound = FeedbackSound(self._root)
         self._apply_initial_geometry()
         self._build_layout()
         self._bind_shortcuts()
         self._enable_drag_and_drop()
+        self._root.after(200, self._offer_resume_last)
 
     def run(self) -> None:
         self._root.mainloop()
@@ -93,10 +117,15 @@ class GameApp:
         file_menu = tk.Menu(menubar, tearoff=0)
         file_menu.add_command(label='Open image…', command=self._open_image)
         file_menu.add_command(label='Open URL…', command=self._open_url)
+        file_menu.add_command(label='Paste image', command=self._paste_clipboard)
+        file_menu.add_command(label='Capture webcam…', command=self._capture_webcam)
+        file_menu.add_command(label='Open gallery folder…', command=self._open_gallery_folder)
         file_menu.add_command(label='Recent…', command=self._open_recent)
         file_menu.add_separator()
         file_menu.add_command(label='Save progress…', command=self._save_session)
         file_menu.add_command(label='Load progress…', command=self._load_session)
+        file_menu.add_command(label='Autosave slot…', command=self._autosave_slot_dialog)
+        file_menu.add_command(label='Load autosave slot…', command=self._load_autosave_slot_dialog)
         file_menu.add_command(label='Export PNG…', command=self._export_png)
         file_menu.add_command(label='Export PDF…', command=self._export_pdf)
         menubar.add_cascade(label='File', menu=file_menu)
@@ -109,13 +138,38 @@ class GameApp:
             variable=self._highlight_current,
             command=self._refresh_highlight,
         )
+        play_menu.add_checkbutton(
+            label='Paint mode (drag fill)',
+            variable=self._paint_mode,
+            command=self._sync_paint_mode,
+        )
+        play_menu.add_checkbutton(
+            label='Edge-aware colors',
+            variable=self._edge_aware,
+        )
+        play_menu.add_checkbutton(
+            label='Lock current palette',
+            variable=self._lock_palette,
+            command=self._toggle_palette_lock,
+        )
         play_menu.add_command(label='Toggle preview', command=self._canvas_toggle_preview)
         menubar.add_cascade(label='Play', menu=play_menu)
+        view_menu = tk.Menu(menubar, tearoff=0)
+        for mode in ColorBlindPalette.MODES:
+            view_menu.add_radiobutton(
+                label=mode,
+                variable=self._color_mode,
+                value=mode,
+                command=self._apply_color_mode,
+            )
+        menubar.add_cascade(label='Vision', menu=view_menu)
         self._root.config(menu=menubar)
 
     def _build_file_controls(self, toolbar: tk.Frame) -> None:
         tk.Button(toolbar, text='Open image…', command=self._open_image).pack(side=tk.LEFT)
         tk.Button(toolbar, text='Open URL…', command=self._open_url).pack(side=tk.LEFT, padx=4)
+        tk.Button(toolbar, text='Paste', command=self._paste_clipboard).pack(side=tk.LEFT, padx=4)
+        tk.Button(toolbar, text='Webcam', command=self._capture_webcam).pack(side=tk.LEFT, padx=4)
         tk.Button(toolbar, text='New puzzle', command=self._regenerate).pack(side=tk.LEFT, padx=4)
         tk.Button(toolbar, text='Cancel', command=self._cancel_generate).pack(side=tk.LEFT, padx=4)
         tk.Label(toolbar, text='Preset:').pack(side=tk.LEFT, padx=(12, 2))
@@ -149,6 +203,8 @@ class GameApp:
         self._root.bind('<Control-y>', lambda _e: self._redo())
         self._root.bind('<Control-Z>', lambda _e: self._undo())
         self._root.bind('<Control-Y>', lambda _e: self._redo())
+        self._root.bind('<Control-v>', lambda _e: self._paste_clipboard())
+        self._root.bind('<Control-V>', lambda _e: self._paste_clipboard())
         self._root.bind('<Key-h>', lambda _e: self._hint())
         self._root.bind('<Key-plus>', lambda _e: self._canvas.zoom_in())
         self._root.bind('<Key-equal>', lambda _e: self._canvas.zoom_in())
@@ -162,8 +218,6 @@ class GameApp:
         self._root.bind('<Down>', lambda _e: self._canvas.pan(0, -PuzzleCanvas._PAN_STEP))
 
     def _enable_drag_and_drop(self) -> None:
-        # Optional: tkinterdnd2 requires a special Tk root and can be unstable on
-        # some X11 setups, so we only enable it when a drop hook is already present.
         if not hasattr(self._root, 'drop_target_register'):
             return
         try:
@@ -188,6 +242,9 @@ class GameApp:
     def _use_preset(self, preset: DifficultyPreset) -> None:
         self._n_colors.set(preset.n_colors)
         self._min_region_area = preset.min_region_area
+        self._preserve_detail = preset.preserve_detail
+        self._kids_mode = preset.kids_mode
+        self._canvas.set_number_scale(1.6 if preset.kids_mode else 1.0)
         if self._rgb is not None:
             self._regenerate()
 
@@ -201,6 +258,54 @@ class GameApp:
         )
         if path:
             self._load_path(path)
+
+    def _open_gallery_folder(self) -> None:
+        folder = filedialog.askdirectory(title='Choose a photo folder')
+        if not folder:
+            return
+        paths = sorted(
+            [
+                str(path)
+                for path in Path(folder).iterdir()
+                if path.suffix.lower() in {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
+            ]
+        )
+        if not paths:
+            messagebox.showinfo('Color by Numbers', 'No images found in that folder.')
+            return
+        labels = [Path(path).name for path in paths[:30]]
+        choice = simpledialog.askstring(
+            'Gallery',
+            'Enter number:\n' + '\n'.join(f'{i + 1}. {label}' for i, label in enumerate(labels)),
+            parent=self._root,
+        )
+        if not choice or not choice.isdigit():
+            return
+        index = int(choice) - 1
+        if 0 <= index < len(paths):
+            self._load_path(paths[index])
+
+    def _paste_clipboard(self) -> None:
+        try:
+            rgb = self._clipboard.grab_rgb()
+        except ValueError as exc:
+            messagebox.showerror('Color by Numbers', str(exc))
+            return
+        self._source_kind = 'clipboard'
+        self._source_value = 'clipboard'
+        self._rgb = rgb
+        self._start_prepare_job(rgb=rgb)
+
+    def _capture_webcam(self) -> None:
+        try:
+            rgb = self._webcam.capture_rgb()
+        except ValueError as exc:
+            messagebox.showerror('Color by Numbers', str(exc))
+            return
+        self._source_kind = 'webcam'
+        self._source_value = 'webcam'
+        self._rgb = rgb
+        self._start_prepare_job(rgb=rgb)
 
     def _load_path(self, path: str) -> None:
         self._source_kind = 'file'
@@ -268,9 +373,11 @@ class GameApp:
         self._job_result = None
         n_colors = int(self._n_colors.get())
         min_area = self._min_region_area
+        preserve_detail = self._preserve_detail
+        edge_aware = self._edge_aware.get()
+        locked = self._locked_palette if self._lock_palette.get() else None
         include_download = url is not None
         tracker = GenerationProgress(include_download=include_download or path is not None)
-
         download_state = {'bytes': 0, 'total': None, 'started': None}
 
         def on_progress(
@@ -322,11 +429,14 @@ class GameApp:
                     on_progress(*tracker.complete_decode())
                 puzzle = self._generator.generate(
                     source,
-                    n_colors=n_colors,
+                    n_colors=n_colors if locked is None else len(locked),
                     min_region_area=min_area,
                     progress=on_progress,
                     cancel_event=self._cancel_event,
                     tracker=tracker,
+                    edge_aware=edge_aware,
+                    preserve_detail=preserve_detail,
+                    locked_palette=locked,
                 )
             except InterruptedError:
                 with self._progress_lock:
@@ -338,7 +448,6 @@ class GameApp:
                 return
             finally:
                 stop_pulse.set()
-            # Hand result to the Tk thread via the loading tick — never call after() here.
             with self._progress_lock:
                 self._job_result = {
                     'status': 'ready',
@@ -409,7 +518,6 @@ class GameApp:
         eta_value = float(eta) if isinstance(eta, (int, float)) else None
         work = str(snapshot.get('work') or '')
         self._status.set(message)
-        # Elapsed is driven by the overlay clock so the timer always ticks.
         self._loading.set_progress(fraction, message, eta_value, work_detail=work)
         self._schedule_loading_tick()
 
@@ -449,14 +557,21 @@ class GameApp:
     def _on_puzzle_ready(self, puzzle) -> None:
         self._loading.hide()
         self._puzzle = puzzle
+        self._timer.reset()
+        self._timer.start()
+        self._canvas.set_number_scale(1.6 if self._kids_mode else 1.0)
         remaining = {
             index: puzzle.remaining_for_color(index)
             for index in range(len(puzzle.palette))
         }
-        self._palette.set_palette(puzzle.palette, remaining)
+        display = self._color_blind.remap(puzzle.palette, self._color_mode.get())
+        self._palette.set_palette(display, remaining)
+        self._canvas.set_display_palette(display)
         self._canvas.show_puzzle(puzzle)
         self._refresh_highlight()
+        self._sync_paint_mode()
         self._update_status()
+        self._schedule_autosave()
 
     def _on_palette_select(self, index: int) -> None:
         self._refresh_highlight()
@@ -468,6 +583,34 @@ class GameApp:
         color_id = self._palette.selected_index() if self._highlight_current.get() else None
         self._canvas.set_highlight_color(color_id)
 
+    def _sync_paint_mode(self) -> None:
+        self._canvas.set_paint_mode(self._paint_mode.get())
+
+    def _toggle_palette_lock(self) -> None:
+        if self._lock_palette.get():
+            if self._puzzle is None:
+                self._lock_palette.set(False)
+                messagebox.showinfo('Color by Numbers', 'Generate a puzzle before locking its palette.')
+                return
+            self._locked_palette = self._puzzle.palette.copy()
+            self._status.set('Palette locked for next generate')
+        else:
+            self._locked_palette = None
+
+    def _apply_color_mode(self) -> None:
+        if self._puzzle is None:
+            return
+        display = self._color_blind.remap(self._puzzle.palette, self._color_mode.get())
+        remaining = {
+            index: self._puzzle.remaining_for_color(index)
+            for index in range(len(self._puzzle.palette))
+        }
+        selected = self._palette.selected_index()
+        self._palette.set_palette(display, remaining)
+        self._palette.select(selected, notify=False)
+        self._canvas.set_display_palette(display)
+        self._refresh_highlight()
+
     def _on_canvas_click(self, x: int, y: int) -> None:
         if self._puzzle is None:
             return
@@ -475,8 +618,10 @@ class GameApp:
         region_id = self._puzzle.try_fill(x, y, selected)
         if region_id is None:
             return
+        self._timer.record_fill()
         self._sound.fill_success()
-        self._canvas.flash_fill()
+        if not self._paint_mode.get():
+            self._canvas.flash_fill()
         self._canvas.set_hint_region(None)
         if self._puzzle.is_complete():
             self._finish_puzzle()
@@ -489,12 +634,15 @@ class GameApp:
         self._canvas.redraw()
         self._refresh_highlight()
         self._update_status()
+        self._schedule_autosave()
 
     def _finish_puzzle(self) -> None:
+        self._timer.stop()
         self._sound.puzzle_complete()
         self._canvas.show_preview(self._puzzle)
-        self._status.set('Complete!')
-        messagebox.showinfo('Color by Numbers', 'Puzzle complete!')
+        summary = self._timer.summary(len(self._puzzle.region_color_id))
+        self._status.set(f'Complete!  {summary}')
+        messagebox.showinfo('Color by Numbers', f'Puzzle complete!\n{summary}')
 
     def _undo(self) -> None:
         if self._puzzle is None or self._puzzle.undo() is None:
@@ -503,6 +651,7 @@ class GameApp:
         self._canvas.redraw()
         self._refresh_highlight()
         self._update_status()
+        self._schedule_autosave()
 
     def _redo(self) -> None:
         if self._puzzle is None or self._puzzle.redo() is None:
@@ -511,6 +660,7 @@ class GameApp:
         self._canvas.redraw()
         self._refresh_highlight()
         self._update_status()
+        self._schedule_autosave()
 
     def _hint(self) -> None:
         if self._puzzle is None:
@@ -559,25 +709,88 @@ class GameApp:
         if not path:
             return
         puzzle, n_colors = self._sessions.load(path)
-        self._puzzle = puzzle
         self._n_colors.set(n_colors)
         self._on_puzzle_ready(puzzle)
+
+    def _autosave_slot_dialog(self) -> None:
+        if self._puzzle is None:
+            messagebox.showinfo('Color by Numbers', 'No puzzle to autosave.')
+            return
+        choice = simpledialog.askstring('Autosave', 'Slot number (1-3):', parent=self._root)
+        if not choice or not choice.isdigit():
+            return
+        path = self._autosave.save_slot(
+            int(choice),
+            self._puzzle,
+            int(self._n_colors.get()),
+            label=str(self._source_value or ''),
+        )
+        self._status.set(f'Autosaved {path.name}')
+
+    def _load_autosave_slot_dialog(self) -> None:
+        slots = self._autosave.list_slots()
+        lines = [
+            f'{item["slot"]}. {"empty" if not item["exists"] else item["label"] or "saved"}'
+            for item in slots
+        ]
+        choice = simpledialog.askstring(
+            'Load autosave',
+            'Slot number:\n' + '\n'.join(lines),
+            parent=self._root,
+        )
+        if not choice or not choice.isdigit():
+            return
+        loaded = self._autosave.load_slot(int(choice))
+        if loaded is None:
+            messagebox.showinfo('Color by Numbers', 'That autosave slot is empty.')
+            return
+        puzzle, n_colors = loaded
+        self._n_colors.set(n_colors)
+        self._on_puzzle_ready(puzzle)
+
+    def _offer_resume_last(self) -> None:
+        loaded = self._autosave.load_last()
+        if loaded is None:
+            return
+        puzzle, n_colors, slot = loaded
+        if not messagebox.askyesno('Color by Numbers', f'Resume autosave slot {slot}?'):
+            return
+        self._n_colors.set(n_colors)
+        self._on_puzzle_ready(puzzle)
+
+    def _schedule_autosave(self) -> None:
+        if self._autosave_after is not None:
+            self._root.after_cancel(self._autosave_after)
+        self._autosave_after = self._root.after(1200, self._autosave_now)
+
+    def _autosave_now(self) -> None:
+        self._autosave_after = None
+        if self._puzzle is None:
+            return
+        self._autosave.save_slot(
+            1,
+            self._puzzle,
+            int(self._n_colors.get()),
+            label=str(self._source_value or 'autosave'),
+        )
 
     def _export_png(self) -> None:
         if self._puzzle is None:
             return
         path = filedialog.asksaveasfilename(defaultextension='.png', filetypes=[('PNG', '*.png')])
         if path:
-            self._exporter.export_png(path, self._puzzle)
+            self._exporter.export_png(path, self._puzzle, print_ready=True)
 
     def _export_pdf(self) -> None:
         if self._puzzle is None:
             return
         path = filedialog.asksaveasfilename(defaultextension='.pdf', filetypes=[('PDF', '*.pdf')])
         if path:
-            self._exporter.export_pdf(path, self._puzzle)
+            self._exporter.export_pdf(path, self._puzzle, print_ready=True)
 
     def _update_status(self) -> None:
         if self._puzzle is None:
             return
-        self._status.set(self._puzzle.status_summary(self._palette.selected_index()))
+        base = self._puzzle.status_summary(self._palette.selected_index())
+        timer = self._timer.summary(len(self._puzzle.region_color_id))
+        self._status.set(f'{base}  ·  {timer}')
