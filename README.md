@@ -37,6 +37,8 @@ uv run python main.py
 3. Select a numbered swatch, then click regions that should use that color  
 4. Correct fills stick; wrong color is ignored. Finish all regions to win  
 
+The window opens at ~90% of the screen; resize freely — the puzzle fills the canvas. Zoom with the mouse wheel (or **Zoom + / Zoom −**), **Fit** to reset, and middle-drag to pan when zoomed in.  
+
 Future standalone EXE will use the same entrypoint (`color_by_numbers.__main__:main`).
 
 ## Library usage
@@ -64,7 +66,7 @@ transform_image("input/photo.jpg", "output/photo_cbn.jpg", n_colors=5)
 | Surface | Role |
 | -------- | ------ |
 | `uv run color-by-numbers` / `python -m color_by_numbers` / `main.py` | Playable tkinter game |
-| `Puzzle`, `PuzzleGenerator`; `GameApp` via `color_by_numbers.game` | Public library API |
+| `Puzzle`, `PuzzleGenerator`; `GameApp` via `color_by_numbers.game.game_app` | Public library API |
 | `color_by_numbers.helpers` | I/O, color spaces, kernels, experiment quantizers |
 | `transform_image*` | Legacy Lab / per-channel posterize helpers |
 | `tests/` | unittest suite |

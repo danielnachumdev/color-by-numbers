@@ -25,7 +25,7 @@ Implementation guide for coding agents changing **color_by_numbers**. Product pi
 │   ├── helpers.py            # I/O, Lab/RGB, kernels, experiment quantizers
 │   ├── puzzle/               # Puzzle model + generator pipeline
 │   ├── loading/              # local path + URL → RGB (HttpGateway + RgbImageLoader)
-│   └── game/                 # tkinter GameApp, canvas, palette
+│   └── game/                 # tkinter GameApp, canvas, zoom/view transform, palette
 ├── tests/
 ├── main.py                   # same GUI entry as __main__
 ├── pyproject.toml
@@ -66,8 +66,8 @@ I/O fixtures live under `tests/input/` / `tests/output/` (paths resolved from th
 
 - Follow the writing-python skill when adding/refactoring modules (class-first, SRP files, no stub shims).
 - **Product path:** `PuzzleGenerator.generate` — Lab k-means palette → connected regions per color → min-area merge → outlines → number anchors → `Puzzle`.
-- **Game:** strict fill — `Puzzle.try_fill` only accepts the region’s true palette index; completion reveals `preview`.
-- **Public surface:** `Puzzle`, `PuzzleGenerator`, plus legacy `transform_image` / `transform_image_rgb_individual_quantization`. Import `GameApp` from `color_by_numbers.game` (keeps tkinter out of the package root).
+- **Game:** strict fill — `Puzzle.try_fill` only accepts the region’s true palette index; completion reveals `preview`. Window starts ~90% of `winfo_screenwidth/height`; `PuzzleCanvas` expands with the window, fits the sheet by default, and zooms/pans via `CanvasViewTransform` (hit-tests through scale/offset).
+- **Public surface:** `Puzzle`, `PuzzleGenerator`, plus legacy `transform_image` / `transform_image_rgb_individual_quantization`. Import `GameApp` from `color_by_numbers.game.game_app` (keeps tkinter out of package/`game` `__init__` for headless CI).
 - Legacy **`transform_image`:** RGB → Lab → Gaussian blur on L → `quantize_image1` → Lab→RGB → save. Experiment only; not the game pipeline.
 - Quantizer variants in `helpers.py` (`quantize_image1` / `2` / `3`, `quantize_dumb`) are experiment helpers — keep behavior stable or update tests/docs when changing them.
 - Many helpers are wrapped with `@announce` (prints on call) — noisy by design for demos; do not strip casually without an intentional logging strategy.
