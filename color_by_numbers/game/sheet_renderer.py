@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw
 
 from ..puzzle.puzzle import Puzzle
 from .sheet_font import SheetFont
+from .sheet_outline_painter import SheetOutlinePainter
 
 
 class SheetRenderer:
@@ -15,11 +16,13 @@ class SheetRenderer:
         min_side: int = 720,
         line_width: int = 1,
         font_loader: SheetFont | None = None,
+        outline_painter: SheetOutlinePainter | None = None,
     ) -> None:
         self._base_scale = base_scale
         self._min_side = min_side
         self.line_width = line_width
         self._font_loader = font_loader or SheetFont()
+        self._outline_painter = outline_painter or SheetOutlinePainter()
         self.content_scale = 1
         self.highlight_color_id: int | None = None
         self.hint_region_id: int | None = None
@@ -148,47 +151,7 @@ class SheetRenderer:
         return upscaled
 
     def _paint_smooth_outlines(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
-        if puzzle.boundary_paths:
-            self._draw_boundary_paths(sheet, puzzle, scale)
-        else:
-            self._draw_bitmap_outlines(sheet, puzzle, scale)
-        self._draw_image_rectangle(sheet, puzzle, scale)
-
-    def _draw_boundary_paths(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
-        thickness = max(self.line_width, int(round(scale * 0.28)) + (self.line_width - 1))
-        for points in puzzle.boundary_paths:
-            if len(points) < 2:
-                continue
-            closed = np.allclose(points[0], points[-1])
-            scaled = np.round(points * scale).astype(np.int32).reshape(-1, 1, 2)
-            cv2.polylines(
-                sheet,
-                [scaled],
-                isClosed=closed,
-                color=(0, 0, 0),
-                thickness=thickness,
-                lineType=cv2.LINE_AA,
-            )
-
-    def _draw_image_rectangle(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
-        height, width = puzzle.label_map.shape
-        thickness = max(self.line_width, int(round(scale * 0.28)) + (self.line_width - 1))
-        cv2.rectangle(
-            sheet,
-            (0, 0),
-            (width * scale - 1, height * scale - 1),
-            color=(0, 0, 0),
-            thickness=thickness,
-            lineType=cv2.LINE_AA,
-        )
-
-    def _draw_bitmap_outlines(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
-        mask = cv2.resize(
-            puzzle.outlines.astype(np.uint8),
-            (sheet.shape[1], sheet.shape[0]),
-            interpolation=cv2.INTER_NEAREST,
-        ).astype(bool)
-        sheet[mask] = (0, 0, 0)
+        self._outline_painter.paint(sheet, puzzle, scale, self.line_width)
 
     def _paint_numbers(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> np.ndarray:
         image = Image.fromarray(sheet)
