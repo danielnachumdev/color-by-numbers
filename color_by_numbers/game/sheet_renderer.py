@@ -49,21 +49,22 @@ class SheetRenderer:
         return sheet
 
     def _paint_smooth_outlines(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
-        if puzzle.contours:
-            self._draw_contour_outlines(sheet, puzzle, scale)
+        if puzzle.boundary_paths:
+            self._draw_boundary_paths(sheet, puzzle, scale)
             return
         self._draw_bitmap_outlines(sheet, puzzle, scale)
 
-    def _draw_contour_outlines(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
+    def _draw_boundary_paths(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
         thickness = max(self._line_width, int(round(scale * 0.35)))
-        for points in puzzle.contours.values():
+        for points in puzzle.boundary_paths:
             if len(points) < 2:
                 continue
+            closed = np.allclose(points[0], points[-1])
             scaled = np.round(points * scale).astype(np.int32).reshape(-1, 1, 2)
             cv2.polylines(
                 sheet,
                 [scaled],
-                isClosed=True,
+                isClosed=closed,
                 color=(0, 0, 0),
                 thickness=thickness,
                 lineType=cv2.LINE_AA,
