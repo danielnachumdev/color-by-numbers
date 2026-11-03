@@ -22,10 +22,15 @@ class TestPrintAndAutosave(unittest.TestCase):
         return PuzzleGenerator().generate(image, n_colors=2, min_region_area=10, max_side=64)
 
     def test_print_sheet_has_margins(self):
+        from color_by_numbers.game.print_page_layout import PrintPageLayout
+
         puzzle = self._puzzle()
-        page = PrintSheetComposer(margin=20, cut_mark=8).compose(puzzle)
-        self.assertGreater(page.shape[0], puzzle.label_map.shape[0])
-        self.assertGreater(page.shape[1], puzzle.label_map.shape[1])
+        page = PrintSheetComposer(
+            layout=PrintPageLayout(bleed_px=8, safe_px=20),
+            cut_mark=8,
+        ).compose(puzzle)
+        self.assertEqual(page.shape[0], PrintPageLayout.A4.height_px)
+        self.assertEqual(page.shape[1], PrintPageLayout.A4.width_px)
 
     def test_export_png_print_ready(self):
         puzzle = self._puzzle()

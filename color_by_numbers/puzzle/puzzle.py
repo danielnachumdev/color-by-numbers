@@ -13,6 +13,7 @@ class Puzzle:
     preview: np.ndarray
     boundary_paths: list[np.ndarray] = field(default_factory=list)
     filled_regions: set[int] = field(default_factory=set)
+    fill_history: list[int] = field(default_factory=list)
     _undo_stack: list[int] = field(default_factory=list, repr=False)
     _redo_stack: list[int] = field(default_factory=list, repr=False)
 
@@ -35,6 +36,7 @@ class Puzzle:
             return None
         self.filled_regions.add(region_id)
         self._undo_stack.append(region_id)
+        self.fill_history.append(region_id)
         self._redo_stack.clear()
         return region_id
 
@@ -43,6 +45,8 @@ class Puzzle:
             return None
         region_id = self._undo_stack.pop()
         self.filled_regions.discard(region_id)
+        if self.fill_history and self.fill_history[-1] == region_id:
+            self.fill_history.pop()
         self._redo_stack.append(region_id)
         return region_id
 
@@ -52,7 +56,17 @@ class Puzzle:
         region_id = self._redo_stack.pop()
         self.filled_regions.add(region_id)
         self._undo_stack.append(region_id)
+        self.fill_history.append(region_id)
         return region_id
+
+    def replay_frames(self) -> list[set[int]]:
+        frames: list[set[int]] = [set()]
+        current: set[int] = set()
+        for region_id in self.fill_history:
+            current = set(current)
+            current.add(region_id)
+            frames.append(current)
+        return frames
 
     def progress(self) -> tuple[int, int]:
         total = len(self.region_color_id)

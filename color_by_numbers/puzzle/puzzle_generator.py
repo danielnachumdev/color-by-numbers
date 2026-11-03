@@ -48,7 +48,9 @@ class PuzzleGenerator:
         *,
         edge_aware: bool = True,
         preserve_detail: bool = False,
+        skin_bias: bool = True,
         locked_palette: np.ndarray | None = None,
+        max_regions: int | None = None,
     ) -> Puzzle:
         progress_tracker = tracker or GenerationProgress(include_download=False)
         report = progress or (lambda _f, _m, _e, _elapsed: None)
@@ -73,6 +75,7 @@ class PuzzleGenerator:
                 n_colors,
                 edge_aware=edge_aware,
                 preserve_detail=preserve_detail,
+                skin_bias=skin_bias,
                 locked_palette=locked_palette,
             )
             stage('Finding regions…')
@@ -80,7 +83,10 @@ class PuzzleGenerator:
             stage('Merging tiny regions…')
             cutoff = self._area_cutoff(rgb.shape, min_region_area)
             label_map, region_color_id = self._cleaner.merge_small_regions(
-                label_map, region_color_id, cutoff
+                label_map,
+                region_color_id,
+                cutoff,
+                max_regions=max_regions,
             )
             stage('Building outlines…')
             outlines = self._outline_builder.build(label_map)

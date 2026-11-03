@@ -41,7 +41,9 @@ uv run python main.py
 
 **View:** window ~90% of screen; wheel / `+` `-` zoom; `0` Fit; `1` 100%; arrows pan; middle-drag pan.
 
-**File:** save/load progress (`.cbn.npz`), autosave slots + resume on launch, print-ready PNG/PDF export (margins, cut marks, palette legend).
+**File:** save/load progress (`.cbn.npz`), autosave slots + resume on launch, print-ready multi-page PDF (A4/Letter, palette page 2, bleed/safe guides), export completed sheet, replay fills.
+
+**Settings:** remembers window size, preset, paint/vision modes, paper size, language (English / עברית).
 
 Future standalone EXE will use the same entrypoint (`color_by_numbers.__main__:main`).
 
