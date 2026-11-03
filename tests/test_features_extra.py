@@ -93,11 +93,16 @@ class TestSmarterQuantizeAndPlayHelpers(unittest.TestCase):
 
 class TestEntrypointSmoke(unittest.TestCase):
     def test_package_exports_and_main(self):
+        # Do not import color_by_numbers.__main__: it loads GameApp/tkinter,
+        # which headless CI Python builds (e.g. uv 3.12) often lack.
         import color_by_numbers
-        from color_by_numbers.__main__ import main
 
         self.assertTrue(hasattr(color_by_numbers, 'PuzzleGenerator'))
-        self.assertTrue(callable(main))
+        main_path = Path(color_by_numbers.__file__).with_name('__main__.py')
+        self.assertTrue(main_path.exists())
+        source = main_path.read_text(encoding='utf-8')
+        self.assertIn('def main', source)
+        self.assertIn('GameApp', source)
 
 
 if __name__ == '__main__':
