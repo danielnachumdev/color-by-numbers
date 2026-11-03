@@ -1,7 +1,7 @@
 import tkinter as tk
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont, ImageTk
+from PIL import Image, ImageTk
 
 from .canvas_view_transform import CanvasViewTransform
 from .sheet_renderer import SheetRenderer
@@ -30,13 +30,13 @@ class PuzzleCanvas(tk.Canvas):
     def show_preview(self, puzzle) -> None:
         self._puzzle = puzzle
         self._view.reset()
-        self._draw_array(puzzle.preview)
+        preview = self._upscale_preview(puzzle.preview)
+        self._draw_array(preview)
 
     def redraw(self) -> None:
         if self._puzzle is None:
             return
         sheet = self._renderer.render(self._puzzle)
-        sheet = self._draw_numbers(sheet, self._puzzle)
         self._draw_array(sheet)
 
     def zoom_in(self) -> None:
@@ -66,15 +66,14 @@ class PuzzleCanvas(tk.Canvas):
         self.bind('<B2-Motion>', self._continue_pan)
         self.bind('<ButtonRelease-2>', self._end_pan)
 
-    def _draw_numbers(self, sheet: np.ndarray, puzzle) -> np.ndarray:
-        image = Image.fromarray(sheet)
-        draw = ImageDraw.Draw(image)
-        font = ImageFont.load_default()
-        for region_id, (x, y) in puzzle.number_anchors.items():
-            if region_id in puzzle.filled_regions:
-                continue
-            text = str(puzzle.player_number(region_id))
-            draw.text((x - 3, y - 5), text, fill=(0, 0, 0), font=font)
+    def _upscale_preview(self, preview: np.ndarray) -> np.ndarray:
+        height, width = preview.shape[:2]
+        scale = self._renderer.choose_scale(height, width)
+        self._renderer.content_scale = scale
+        image = Image.fromarray(preview).resize(
+            (width * scale, height * scale),
+            Image.Resampling.NEAREST,
+        )
         return np.asarray(image)
 
     def _draw_array(self, rgb: np.ndarray) -> None:
@@ -90,7 +89,7 @@ class PuzzleCanvas(tk.Canvas):
         displayed_width, displayed_height = self._view.displayed_size()
         image = Image.fromarray(self._source_rgb).resize(
             (displayed_width, displayed_height),
-            Image.NEAREST,
+            Image.Resampling.LANCZOS,
         )
         self._photo = ImageTk.PhotoImage(image)
         self.delete('all')
@@ -117,7 +116,10 @@ class PuzzleCanvas(tk.Canvas):
         mapped = self._view.canvas_to_content(event.x, event.y)
         if mapped is None:
             return
-        self._on_click(*mapped)
+        scale = max(1, self._renderer.content_scale)
+        label_x = int(mapped[0] / scale)
+        label_y = int(mapped[1] / scale)
+        self._on_click(label_x, label_y)
 
     def _handle_mousewheel(self, event) -> None:
         if event.delta == 0:
