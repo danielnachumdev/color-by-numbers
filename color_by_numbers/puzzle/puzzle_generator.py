@@ -6,6 +6,7 @@ from .outline_builder import OutlineBuilder
 from .palette_quantizer import PaletteQuantizer
 from .puzzle import Puzzle
 from .region_cleaner import RegionCleaner
+from .region_contour_extractor import RegionContourExtractor
 from .region_labeler import RegionLabeler
 
 
@@ -17,12 +18,14 @@ class PuzzleGenerator:
         cleaner: RegionCleaner | None = None,
         outline_builder: OutlineBuilder | None = None,
         number_placer: NumberPlacer | None = None,
+        contour_extractor: RegionContourExtractor | None = None,
     ) -> None:
         self._quantizer = quantizer or PaletteQuantizer()
         self._labeler = labeler or RegionLabeler()
         self._cleaner = cleaner or RegionCleaner()
         self._outline_builder = outline_builder or OutlineBuilder()
         self._number_placer = number_placer or NumberPlacer()
+        self._contour_extractor = contour_extractor or RegionContourExtractor()
 
     def generate(
         self,
@@ -39,6 +42,7 @@ class PuzzleGenerator:
         )
         outlines = self._outline_builder.build(label_map)
         anchors = self._number_placer.place(label_map, region_color_id)
+        contours = self._contour_extractor.extract(label_map, region_color_id)
         preview = self._build_preview(label_map, region_color_id, palette, rgb.shape)
         return Puzzle(
             label_map=label_map,
@@ -47,6 +51,7 @@ class PuzzleGenerator:
             outlines=outlines,
             number_anchors=anchors,
             preview=preview,
+            contours=contours,
         )
 
     def _resize_to_max_side(self, rgb: np.ndarray, max_side: int) -> np.ndarray:
