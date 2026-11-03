@@ -136,11 +136,11 @@ class TestGameAppPackageExport(unittest.TestCase):
 
         self.assertFalse(hasattr(color_by_numbers, 'GameApp'))
         self.assertNotIn('GameApp', getattr(game_pkg, '__all__', []))
-        # Avoid importing game_app (pulls tkinter); assert package surface via source.
+        # Avoid importing GameApp (pulls tkinter); assert export surface via source.
         init_path = Path(game_pkg.__file__).resolve().parent / 'game_app' / '__init__.py'
         source = init_path.read_text(encoding='utf-8')
-        self.assertIn('GameApp', source)
-        self.assertIn('__all__', source)
+        self.assertIn('from .game_app import GameApp', source)
+        self.assertIn("'GameApp'", source)
 
 
 if __name__ == '__main__':
