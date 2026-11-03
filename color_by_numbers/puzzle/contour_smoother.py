@@ -2,12 +2,12 @@ import numpy as np
 
 
 class ContourSmoother:
-    def smooth(self, points: np.ndarray, iterations: int = 5) -> np.ndarray:
+    def smooth(self, points: np.ndarray, iterations: int = 5, closed: bool = True) -> np.ndarray:
         pts = points.reshape(-1, 2).astype(np.float64)
         if len(pts) < 4:
             return pts
         for _ in range(iterations):
-            pts = self._chaikin_closed(pts)
+            pts = self._chaikin_closed(pts) if closed else self._chaikin_open(pts)
         return pts
 
     def _chaikin_closed(self, points: np.ndarray) -> np.ndarray:
@@ -19,3 +19,15 @@ class ContourSmoother:
             refined[index * 2] = 0.75 * current + 0.25 * nxt
             refined[index * 2 + 1] = 0.25 * current + 0.75 * nxt
         return refined
+
+    def _chaikin_open(self, points: np.ndarray) -> np.ndarray:
+        if len(points) < 2:
+            return points
+        refined = [points[0]]
+        for index in range(len(points) - 1):
+            current = points[index]
+            nxt = points[index + 1]
+            refined.append(0.75 * current + 0.25 * nxt)
+            refined.append(0.25 * current + 0.75 * nxt)
+        refined.append(points[-1])
+        return np.asarray(refined, dtype=np.float64)

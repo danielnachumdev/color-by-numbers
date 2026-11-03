@@ -11,7 +11,7 @@ class Puzzle:
     outlines: np.ndarray
     number_anchors: dict[int, tuple[int, int]]
     preview: np.ndarray
-    contours: dict[int, np.ndarray] = field(default_factory=dict)
+    boundary_paths: list[np.ndarray] = field(default_factory=list)
     filled_regions: set[int] = field(default_factory=set)
 
     def region_at(self, x: int, y: int) -> int | None:

@@ -5,33 +5,53 @@ import numpy as np
 from color_by_numbers.game.sheet_renderer import SheetRenderer
 from color_by_numbers.puzzle.contour_smoother import ContourSmoother
 from color_by_numbers.puzzle.puzzle import Puzzle
-from color_by_numbers.puzzle.region_contour_extractor import RegionContourExtractor
+from color_by_numbers.puzzle.shared_boundary_tracer import SharedBoundaryTracer
 
 
 class TestContourSmoother(unittest.TestCase):
     def test_chaikin_increases_point_count(self):
         square = np.array([[0, 0], [10, 0], [10, 10], [0, 10]], dtype=np.float64)
-        smoothed = ContourSmoother().smooth(square, iterations=5)
+        smoothed = ContourSmoother().smooth(square, iterations=5, closed=True)
         self.assertGreater(len(smoothed), len(square) * 8)
 
+    def test_open_chaikin_keeps_endpoints(self):
+        line = np.array([[0, 0], [5, 0], [10, 0]], dtype=np.float64)
+        smoothed = ContourSmoother().smooth(line, iterations=2, closed=False)
+        np.testing.assert_allclose(smoothed[0], line[0])
+        np.testing.assert_allclose(smoothed[-1], line[-1])
 
-class TestRegionContourExtractor(unittest.TestCase):
-    def test_extracts_smoothed_contour_per_region(self):
+
+class TestSharedBoundaryTracer(unittest.TestCase):
+    def test_shared_edge_is_traced_once(self):
+        label_map = np.zeros((20, 30), dtype=np.int32)
+        label_map[:, :15] = 1
+        label_map[:, 15:] = 2
+        tracer = SharedBoundaryTracer(smooth_iterations=0, simplify_epsilon=0.0)
+        adjacency = tracer._build_corner_adjacency(label_map)
+        remaining = {point: set(neighbors) for point, neighbors in adjacency.items()}
+        raw_paths = tracer._chain_paths(remaining)
+        seam_edge_uses = 0
+        for path in raw_paths:
+            for start, end in zip(path, path[1:]):
+                if start[0] == 15 and end[0] == 15:
+                    seam_edge_uses += 1
+        self.assertEqual(seam_edge_uses, 20)
+
+    def test_two_regions_do_not_emit_two_full_loops(self):
         label_map = np.zeros((40, 40), dtype=np.int32)
         label_map[5:20, 5:20] = 1
         label_map[5:20, 20:35] = 2
-        contours = RegionContourExtractor().extract(label_map, {1: 0, 2: 1})
-        self.assertEqual(set(contours), {1, 2})
-        self.assertGreaterEqual(len(contours[1]), 4)
+        paths = SharedBoundaryTracer().trace(label_map)
+        self.assertGreaterEqual(len(paths), 1)
+        self.assertLess(len(paths), 8)
 
 
 class TestSheetRenderer(unittest.TestCase):
-    def test_renders_above_min_side_with_smooth_contours(self):
+    def test_renders_above_min_side_with_shared_boundaries(self):
         label_map = np.zeros((50, 80), dtype=np.int32)
         label_map[:, :40] = 1
         label_map[:, 40:] = 2
-        extractor = RegionContourExtractor()
-        contours = extractor.extract(label_map, {1: 0, 2: 1})
+        paths = SharedBoundaryTracer().trace(label_map)
         puzzle = Puzzle(
             label_map=label_map,
             region_color_id={1: 0, 2: 1},
@@ -39,7 +59,7 @@ class TestSheetRenderer(unittest.TestCase):
             outlines=np.zeros_like(label_map, dtype=np.uint8),
             number_anchors={1: (20, 25), 2: (60, 25)},
             preview=np.zeros((50, 80, 3), dtype=np.uint8),
-            contours=contours,
+            boundary_paths=paths,
         )
         renderer = SheetRenderer(base_scale=2, min_side=400)
         sheet = renderer.render(puzzle)
