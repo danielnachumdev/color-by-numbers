@@ -58,7 +58,7 @@ class TestPuzzleSessionAndExport(unittest.TestCase):
 class TestDifficultyPresets(unittest.TestCase):
     def test_presets_exist(self):
         names = {preset.name for preset in DifficultyPresets.all()}
-        self.assertEqual(names, {'Easy', 'Normal', 'Hard'})
+        self.assertEqual(names, {'Easy', 'Normal', 'Hard', 'Kids'})
 
 
 class TestGenerationProgressCallback(unittest.TestCase):
