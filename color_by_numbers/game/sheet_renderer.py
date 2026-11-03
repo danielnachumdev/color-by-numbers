@@ -51,8 +51,9 @@ class SheetRenderer:
     def _paint_smooth_outlines(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
         if puzzle.boundary_paths:
             self._draw_boundary_paths(sheet, puzzle, scale)
-            return
-        self._draw_bitmap_outlines(sheet, puzzle, scale)
+        else:
+            self._draw_bitmap_outlines(sheet, puzzle, scale)
+        self._draw_image_rectangle(sheet, puzzle, scale)
 
     def _draw_boundary_paths(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
         thickness = max(self._line_width, int(round(scale * 0.35)))
@@ -69,6 +70,20 @@ class SheetRenderer:
                 thickness=thickness,
                 lineType=cv2.LINE_AA,
             )
+
+    def _draw_image_rectangle(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
+        height, width = puzzle.label_map.shape
+        thickness = max(self._line_width, int(round(scale * 0.35)))
+        top_left = (0, 0)
+        bottom_right = (width * scale - 1, height * scale - 1)
+        cv2.rectangle(
+            sheet,
+            top_left,
+            bottom_right,
+            color=(0, 0, 0),
+            thickness=thickness,
+            lineType=cv2.LINE_AA,
+        )
 
     def _draw_bitmap_outlines(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
         mask = cv2.resize(

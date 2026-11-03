@@ -7,7 +7,7 @@ from .contour_smoother import ContourSmoother
 
 
 class SharedBoundaryTracer:
-    """Trace each shared region border once (no per-region duplicate loops)."""
+    """Trace each internal shared region border once (no per-region duplicate loops)."""
 
     def __init__(
         self,
@@ -27,31 +27,21 @@ class SharedBoundaryTracer:
     def _build_corner_adjacency(self, label_map: np.ndarray) -> dict[tuple[int, int], set[tuple[int, int]]]:
         height, width = label_map.shape
         adjacency: dict[tuple[int, int], set[tuple[int, int]]] = defaultdict(set)
-        self._add_image_border(adjacency, height, width)
         for y in range(height):
             for x in range(width - 1):
                 if label_map[y, x] == label_map[y, x + 1]:
+                    continue
+                if label_map[y, x] == 0 or label_map[y, x + 1] == 0:
                     continue
                 self._add_segment(adjacency, (x + 1, y), (x + 1, y + 1))
         for y in range(height - 1):
             for x in range(width):
                 if label_map[y, x] == label_map[y + 1, x]:
                     continue
+                if label_map[y, x] == 0 or label_map[y + 1, x] == 0:
+                    continue
                 self._add_segment(adjacency, (x, y + 1), (x + 1, y + 1))
         return adjacency
-
-    def _add_image_border(
-        self,
-        adjacency: dict[tuple[int, int], set[tuple[int, int]]],
-        height: int,
-        width: int,
-    ) -> None:
-        for x in range(width):
-            self._add_segment(adjacency, (x, 0), (x + 1, 0))
-            self._add_segment(adjacency, (x, height), (x + 1, height))
-        for y in range(height):
-            self._add_segment(adjacency, (0, y), (0, y + 1))
-            self._add_segment(adjacency, (width, y), (width, y + 1))
 
     def _add_segment(
         self,
