@@ -5,8 +5,15 @@ from .contour_smoother import ContourSmoother
 
 
 class RegionContourExtractor:
-    def __init__(self, smoother: ContourSmoother | None = None) -> None:
+    def __init__(
+        self,
+        smoother: ContourSmoother | None = None,
+        simplify_epsilon: float = 1.25,
+        smooth_iterations: int = 5,
+    ) -> None:
         self._smoother = smoother or ContourSmoother()
+        self._simplify_epsilon = simplify_epsilon
+        self._smooth_iterations = smooth_iterations
 
     def extract(
         self,
@@ -20,5 +27,9 @@ class RegionContourExtractor:
             if not found:
                 continue
             largest = max(found, key=cv2.contourArea)
-            contours[region_id] = self._smoother.smooth(largest)
+            simplified = cv2.approxPolyDP(largest, self._simplify_epsilon, closed=True)
+            contours[region_id] = self._smoother.smooth(
+                simplified,
+                iterations=self._smooth_iterations,
+            )
         return contours

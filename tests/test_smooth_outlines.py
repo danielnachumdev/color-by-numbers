@@ -11,8 +11,8 @@ from color_by_numbers.puzzle.region_contour_extractor import RegionContourExtrac
 class TestContourSmoother(unittest.TestCase):
     def test_chaikin_increases_point_count(self):
         square = np.array([[0, 0], [10, 0], [10, 10], [0, 10]], dtype=np.float64)
-        smoothed = ContourSmoother().smooth(square, iterations=2)
-        self.assertGreater(len(smoothed), len(square))
+        smoothed = ContourSmoother().smooth(square, iterations=5)
+        self.assertGreater(len(smoothed), len(square) * 8)
 
 
 class TestRegionContourExtractor(unittest.TestCase):

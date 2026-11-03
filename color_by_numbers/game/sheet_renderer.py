@@ -13,7 +13,7 @@ class SheetRenderer:
         self,
         base_scale: int = 3,
         min_side: int = 1000,
-        line_width: int = 2,
+        line_width: int = 1,
         font_loader: SheetFont | None = None,
     ) -> None:
         self._base_scale = base_scale
@@ -55,7 +55,7 @@ class SheetRenderer:
         self._draw_bitmap_outlines(sheet, puzzle, scale)
 
     def _draw_contour_outlines(self, sheet: np.ndarray, puzzle: Puzzle, scale: int) -> None:
-        thickness = max(self._line_width, scale // 2)
+        thickness = max(self._line_width, int(round(scale * 0.35)))
         for points in puzzle.contours.values():
             if len(points) < 2:
                 continue

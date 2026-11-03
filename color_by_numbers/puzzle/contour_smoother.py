@@ -2,7 +2,7 @@ import numpy as np
 
 
 class ContourSmoother:
-    def smooth(self, points: np.ndarray, iterations: int = 3) -> np.ndarray:
+    def smooth(self, points: np.ndarray, iterations: int = 5) -> np.ndarray:
         pts = points.reshape(-1, 2).astype(np.float64)
         if len(pts) < 4:
             return pts
