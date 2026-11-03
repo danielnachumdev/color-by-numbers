@@ -11,6 +11,9 @@ from .shared_boundary_tracer import SharedBoundaryTracer
 
 
 class PuzzleGenerator:
+    _MIN_AREA_FRACTION = 0.0025
+    _MIN_AREA_FLOOR = 120
+
     def __init__(
         self,
         quantizer: PaletteQuantizer | None = None,
@@ -31,14 +34,15 @@ class PuzzleGenerator:
         self,
         rgb: np.ndarray,
         n_colors: int = 8,
-        min_region_area: int = 40,
+        min_region_area: int | None = None,
         max_side: int = 480,
     ) -> Puzzle:
         rgb = self._resize_to_max_side(rgb, max_side)
         index_map, palette = self._quantizer.quantize(rgb, n_colors)
         label_map, region_color_id = self._labeler.label(index_map, n_colors)
+        cutoff = self._area_cutoff(rgb.shape, min_region_area)
         label_map, region_color_id = self._cleaner.merge_small_regions(
-            label_map, region_color_id, min_region_area
+            label_map, region_color_id, cutoff
         )
         outlines = self._outline_builder.build(label_map)
         anchors = self._number_placer.place(label_map, region_color_id)
@@ -53,6 +57,14 @@ class PuzzleGenerator:
             preview=preview,
             boundary_paths=boundary_paths,
         )
+
+    def _area_cutoff(self, shape: tuple[int, ...], min_region_area: int | None) -> int:
+        height, width = shape[:2]
+        relative = int(self._MIN_AREA_FRACTION * height * width)
+        floor = max(self._MIN_AREA_FLOOR, relative)
+        if min_region_area is None:
+            return floor
+        return max(min_region_area, floor)
 
     def _resize_to_max_side(self, rgb: np.ndarray, max_side: int) -> np.ndarray:
         height, width = rgb.shape[:2]

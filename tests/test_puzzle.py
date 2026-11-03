@@ -93,6 +93,17 @@ class TestPuzzleGenerator(unittest.TestCase):
             x, y = puzzle.number_anchors[region_id]
             self.assertEqual(int(puzzle.label_map[y, x]), region_id)
 
+    def test_area_cutoff_merges_tiny_regions(self):
+        image = np.full((80, 80, 3), 200, dtype=np.uint8)
+        image[0:2, 0:2] = (10, 10, 10)
+        puzzle = PuzzleGenerator().generate(image, n_colors=2, max_side=80)
+        areas = [
+            int(np.count_nonzero(puzzle.label_map == region_id))
+            for region_id in puzzle.region_color_id
+        ]
+        self.assertTrue(areas)
+        self.assertGreaterEqual(min(areas), PuzzleGenerator._MIN_AREA_FLOOR)
+
     def test_labeler_assigns_color_ids(self):
         index_map = np.array([
             [0, 0, 1],

@@ -66,6 +66,11 @@ class TestSheetRenderer(unittest.TestCase):
         self.assertGreaterEqual(max(sheet.shape[0], sheet.shape[1]), 400)
         self.assertEqual(renderer.content_scale, 5)
         self.assertTrue((sheet == 0).any())
+        # Crisp rectangular image frame (unsmoothed)
+        self.assertTrue(np.all(sheet[0, :, 0] == 0))
+        self.assertTrue(np.all(sheet[-1, :, 0] == 0))
+        self.assertTrue(np.all(sheet[:, 0, 0] == 0))
+        self.assertTrue(np.all(sheet[:, -1, 0] == 0))
 
 
 if __name__ == '__main__':

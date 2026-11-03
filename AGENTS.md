@@ -65,8 +65,8 @@ I/O fixtures live under `tests/input/` / `tests/output/` (paths resolved from th
 ## Code style & domain notes
 
 - Follow the writing-python skill when adding/refactoring modules (class-first, SRP files, no stub shims).
-- **Product path:** `PuzzleGenerator.generate` — Lab k-means palette → connected regions per color → min-area merge → outlines → unique shared boundary paths → number anchors → `Puzzle`.
-- **Sheet rendering:** `SheetRenderer` draws at high resolution (min side ~1000px) with Chaikin-smoothed anti-aliased **shared** borders (each edge once) and TrueType numbers; canvas hit-tests divide by `content_scale`.
+- **Product path:** `PuzzleGenerator.generate` — Lab k-means palette → connected regions per color → min-area merge (scale-aware cutoff) → outlines → unique shared boundary paths → number anchors → `Puzzle`.
+- **Sheet rendering:** `SheetRenderer` draws at high resolution (min side ~1000px) with Chaikin-smoothed anti-aliased **shared internal** borders (each edge once), plus an always-on crisp rectangular image frame. Canvas hit-tests divide by `content_scale`.
 - **Game:** strict fill — `Puzzle.try_fill` only accepts the region’s true palette index; completion reveals `preview`. Window starts ~90% of `winfo_screenwidth/height`; `PuzzleCanvas` expands with the window, fits the sheet by default, and zooms/pans via `CanvasViewTransform` (hit-tests through scale/offset).
 - **Public surface:** `Puzzle`, `PuzzleGenerator`, plus legacy `transform_image` / `transform_image_rgb_individual_quantization`. Import `GameApp` from `color_by_numbers.game.game_app` (keeps tkinter out of package/`game` `__init__` for headless CI).
 - Legacy **`transform_image`:** RGB → Lab → Gaussian blur on L → `quantize_image1` → Lab→RGB → save. Experiment only; not the game pipeline.
