@@ -1,18 +1,18 @@
 name: CI
 
-# Thin orchestrator. Prefer requiring checks "CI / CI" and "Semver / Semver".
+# Thin orchestrator. Prefer requiring check "CI / CI".
 # Pin @latest for the floating release tag.
+# Semver omitted: this repo does not publish versioned artifacts.
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${ github.workflow }-${ github.event.pull_request.number || github.ref }
   cancel-in-progress: true
 
 permissions:
@@ -26,16 +26,10 @@ jobs:
     with:
       allow-empty: true
 
-  semver:
-    name: Semver
-    if: github.event_name == 'pull_request'
-    uses: danielnachumdev/actions/.github/workflows/semver-ci.yml@latest
-    with:
-      standards-ref: latest
 
   dependabot-auto-merge:
     name: Dependabot auto-merge
-    needs: [ci, semver]
+    needs: [ci]
     if: github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]'
     permissions:
       contents: write
