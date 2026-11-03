@@ -5,6 +5,7 @@ from ..loading.rgb_image_loader import RgbImageLoader
 from ..puzzle.puzzle_generator import PuzzleGenerator
 from .palette_panel import PalettePanel
 from .puzzle_canvas import PuzzleCanvas
+from .screen_window_geometry import ScreenWindowGeometry
 
 
 class GameApp:
@@ -12,33 +13,54 @@ class GameApp:
         self,
         generator: PuzzleGenerator | None = None,
         image_loader: RgbImageLoader | None = None,
+        window_geometry: ScreenWindowGeometry | None = None,
     ) -> None:
         self._generator = generator or PuzzleGenerator()
         self._image_loader = image_loader or RgbImageLoader()
+        self._window_geometry = window_geometry or ScreenWindowGeometry()
         self._puzzle = None
         self._rgb = None
         self._root = tk.Tk()
         self._root.title('Color by Numbers')
         self._n_colors = tk.IntVar(value=8)
         self._status = tk.StringVar(value='Open an image or URL to start')
+        self._apply_initial_geometry()
         self._build_layout()
 
     def run(self) -> None:
         self._root.mainloop()
 
+    def _apply_initial_geometry(self) -> None:
+        self._root.update_idletasks()
+        geometry = self._window_geometry.geometry_string(
+            self._root.winfo_screenwidth(),
+            self._root.winfo_screenheight(),
+        )
+        self._root.geometry(geometry)
+        self._root.minsize(640, 480)
+
     def _build_layout(self) -> None:
         toolbar = tk.Frame(self._root)
         toolbar.pack(fill=tk.X, padx=8, pady=8)
+        self._build_file_controls(toolbar)
+        tk.Label(self._root, textvariable=self._status).pack(fill=tk.X, padx=8)
+        self._canvas = PuzzleCanvas(self._root, on_click=self._on_canvas_click)
+        self._canvas.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+        self._build_zoom_controls(toolbar)
+        self._palette = PalettePanel(self._root, on_select=self._on_palette_select)
+        self._palette.pack(fill=tk.X, padx=8, pady=8)
+
+    def _build_file_controls(self, toolbar: tk.Frame) -> None:
         tk.Button(toolbar, text='Open image…', command=self._open_image).pack(side=tk.LEFT)
         tk.Button(toolbar, text='Open URL…', command=self._open_url).pack(side=tk.LEFT, padx=4)
         tk.Button(toolbar, text='New puzzle', command=self._regenerate).pack(side=tk.LEFT, padx=4)
         tk.Label(toolbar, text='Colors:').pack(side=tk.LEFT, padx=(12, 2))
         tk.Spinbox(toolbar, from_=2, to=16, width=4, textvariable=self._n_colors).pack(side=tk.LEFT)
-        tk.Label(self._root, textvariable=self._status).pack(fill=tk.X, padx=8)
-        self._canvas = PuzzleCanvas(self._root, on_click=self._on_canvas_click)
-        self._canvas.pack(padx=8, pady=8)
-        self._palette = PalettePanel(self._root, on_select=self._on_palette_select)
-        self._palette.pack(fill=tk.X, padx=8, pady=8)
+
+    def _build_zoom_controls(self, toolbar: tk.Frame) -> None:
+        tk.Button(toolbar, text='Zoom −', command=self._canvas.zoom_out).pack(side=tk.RIGHT)
+        tk.Button(toolbar, text='Zoom +', command=self._canvas.zoom_in).pack(side=tk.RIGHT, padx=4)
+        tk.Button(toolbar, text='Fit', command=self._canvas.reset_zoom).pack(side=tk.RIGHT, padx=4)
 
     def _open_image(self) -> None:
         path = filedialog.askopenfilename(
