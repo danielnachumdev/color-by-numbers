@@ -64,7 +64,7 @@ transform_image("input/photo.jpg", "output/photo_cbn.jpg", n_colors=5)
 | Surface | Role |
 | -------- | ------ |
 | `uv run color-by-numbers` / `python -m color_by_numbers` / `main.py` | Playable tkinter game |
-| `GameApp`, `Puzzle`, `PuzzleGenerator` | Public library API |
+| `Puzzle`, `PuzzleGenerator`; `GameApp` via `color_by_numbers.game` | Public library API |
 | `color_by_numbers.helpers` | I/O, color spaces, kernels, experiment quantizers |
 | `transform_image*` | Legacy Lab / per-channel posterize helpers |
 | `tests/` | unittest suite |
@@ -74,8 +74,8 @@ transform_image("input/photo.jpg", "output/photo_cbn.jpg", n_colors=5)
 Agent/developer workflow (layout, tests, PR labels): see [`AGENTS.md`](./AGENTS.md).
 
 ```bash
-uv sync
-cd tests && uv run python -m unittest discover -v
+uv sync --group dev
+uv run pytest -q
 ```
 
 Report security issues privately via [GitHub advisories](https://github.com/danielnachumdev/color_by_numbers/security/advisories/new) — please do not open a public issue for vulnerabilities.

@@ -19,7 +19,7 @@ Implementation guide for coding agents changing **color_by_numbers**. Product pi
 ```text
 .
 ├── color_by_numbers/
-│   ├── __init__.py           # GameApp, Puzzle, PuzzleGenerator, legacy transform_*
+│   ├── __init__.py           # Puzzle, PuzzleGenerator, legacy transform_* (no GameApp/tkinter)
 │   ├── __main__.py           # launches GameApp
 │   ├── transforms.py         # legacy Lab / per-channel posterize helpers
 │   ├── helpers.py            # I/O, Lab/RGB, kernels, experiment quantizers
@@ -41,22 +41,23 @@ Shared CI/CD patterns (when wired): [`danielnachumdev/actions`](https://github.c
 ## Develop
 
 ```bash
-uv sync
+uv sync --group dev
 ```
 
 | Task | Command |
 | ---- | ------- |
 | Game | `uv run color-by-numbers` or `uv run python -m color_by_numbers` or `uv run python main.py` |
-| Import smoke | `uv run python -c "from color_by_numbers import GameApp, PuzzleGenerator"` |
-| Tests | `cd tests && uv run python -m unittest discover -v` |
+| Import smoke | `uv run python -c "from color_by_numbers import PuzzleGenerator"` |
+| Tests | `uv run pytest -q` (CI default) or `cd tests && uv run python -m unittest discover -v` |
 | Add a dep | edit `pyproject.toml`, then `uv lock` && `uv sync` |
 
-I/O tests use paths like `./input/black_line.png` relative to **cwd** — run unittest from `tests/` so fixtures under `tests/input/` resolve. Root `input/` / `output/` are for demos and are gitignored. `uv sync` installs the project editable, so `PYTHONPATH` is not required.
+I/O fixtures live under `tests/input/` / `tests/output/` (paths resolved from the test file). Root `input/` / `output/` are for demos and are gitignored. `uv sync` installs the project editable, so `PYTHONPATH` is not required. Package `__init__` does **not** import `GameApp` so headless CI (uv CPython without tkinter) can import the library.
 
 ### Dependencies
 
 - Declared in [`pyproject.toml`](pyproject.toml); locked in [`uv.lock`](uv.lock) (commit both).
 - Runtime: `numpy`, `scipy`, `opencv-python`, `scikit-learn`, `danielutils`, `Pillow`
+- Dev group: `pytest` (required by shared CI `uv sync --group dev`)
 - Do **not** reintroduce `requirements.txt` unless intentionally supporting a non-uv path.
 
 ---
@@ -66,7 +67,7 @@ I/O tests use paths like `./input/black_line.png` relative to **cwd** — run un
 - Follow the writing-python skill when adding/refactoring modules (class-first, SRP files, no stub shims).
 - **Product path:** `PuzzleGenerator.generate` — Lab k-means palette → connected regions per color → min-area merge → outlines → number anchors → `Puzzle`.
 - **Game:** strict fill — `Puzzle.try_fill` only accepts the region’s true palette index; completion reveals `preview`.
-- **Public surface:** `GameApp`, `Puzzle`, `PuzzleGenerator`, plus legacy `transform_image` / `transform_image_rgb_individual_quantization`.
+- **Public surface:** `Puzzle`, `PuzzleGenerator`, plus legacy `transform_image` / `transform_image_rgb_individual_quantization`. Import `GameApp` from `color_by_numbers.game` (keeps tkinter out of the package root).
 - Legacy **`transform_image`:** RGB → Lab → Gaussian blur on L → `quantize_image1` → Lab→RGB → save. Experiment only; not the game pipeline.
 - Quantizer variants in `helpers.py` (`quantize_image1` / `2` / `3`, `quantize_dumb`) are experiment helpers — keep behavior stable or update tests/docs when changing them.
 - Many helpers are wrapped with `@announce` (prints on call) — noisy by design for demos; do not strip casually without an intentional logging strategy.

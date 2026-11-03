@@ -16,6 +16,11 @@ dependencies = [
 [project.scripts]
 color-by-numbers = "color_by_numbers.__main__:main"
 
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

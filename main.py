@@ -1,4 +1,4 @@
-from color_by_numbers import GameApp
+from color_by_numbers.game import GameApp
 
 
 def main() -> None:
